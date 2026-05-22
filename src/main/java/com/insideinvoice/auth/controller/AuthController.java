@@ -1,12 +1,15 @@
 package com.insideinvoice.auth.controller;
 
+import com.insideinvoice.auth.dto.request.ChangePasswordRequest;
 import com.insideinvoice.auth.dto.request.ForgotPasswordRequest;
 import com.insideinvoice.auth.dto.request.LoginRequest;
 import com.insideinvoice.auth.dto.request.ResetPasswordRequest;
 import com.insideinvoice.auth.dto.request.SignupRequest;
+import com.insideinvoice.auth.dto.request.UpdateProfileRequest;
 import com.insideinvoice.auth.dto.response.ApiResponse;
 import com.insideinvoice.auth.dto.response.JwtResponse;
 import com.insideinvoice.auth.service.AuthService;
+import com.insideinvoice.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.Cookie;
@@ -16,7 +19,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -78,5 +83,23 @@ public class AuthController {
         httpResponse.addCookie(jwtCookie);
 
         return ResponseEntity.ok(ApiResponse.success("Logged out successfully"));
+    }
+
+    @PutMapping("/profile")
+    @Operation(summary = "Update user profile (name)")
+    public ResponseEntity<ApiResponse<Void>> updateProfile(
+            @Valid @RequestBody UpdateProfileRequest request) {
+        UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        authService.updateProfile(request, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Profile updated"));
+    }
+
+    @PutMapping("/change-password")
+    @Operation(summary = "Change user password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request) {
+        UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        authService.changePassword(request, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Password changed successfully"));
     }
 }

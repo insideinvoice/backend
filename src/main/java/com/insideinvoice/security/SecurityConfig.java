@@ -39,6 +39,7 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(Constants.API_AUTH).permitAll()
+                        .requestMatchers(Constants.API_CONTACT).permitAll()
                         .requestMatchers(Constants.API_SWAGGER).permitAll()
                         .requestMatchers(Constants.API_API_DOCS).permitAll()
                         .requestMatchers(Constants.API_ACTUATOR).permitAll()

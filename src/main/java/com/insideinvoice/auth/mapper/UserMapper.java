@@ -13,6 +13,7 @@ public class UserMapper {
                 .tokenType("Bearer")
                 .userId(user.getId())
                 .name(user.getName())
+                .username(user.getUsername())
                 .email(user.getEmail())
                 .role(user.getRole().name())
                 .businessId(user.getBusinessId())

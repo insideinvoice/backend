@@ -1,9 +1,11 @@
 package com.insideinvoice.auth.service.impl;
 
+import com.insideinvoice.auth.dto.request.ChangePasswordRequest;
 import com.insideinvoice.auth.dto.request.ForgotPasswordRequest;
 import com.insideinvoice.auth.dto.request.LoginRequest;
 import com.insideinvoice.auth.dto.request.ResetPasswordRequest;
 import com.insideinvoice.auth.dto.request.SignupRequest;
+import com.insideinvoice.auth.dto.request.UpdateProfileRequest;
 import com.insideinvoice.auth.dto.response.JwtResponse;
 import com.insideinvoice.auth.entity.Role;
 import com.insideinvoice.auth.entity.User;
@@ -49,6 +51,9 @@ public class AuthServiceImpl implements AuthService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new DuplicateResourceException("User", "email", request.getEmail());
         }
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new DuplicateResourceException("User", "username", request.getUsername());
+        }
 
         boolean isAdminRequest = false;
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -76,6 +81,7 @@ public class AuthServiceImpl implements AuthService {
 
         User user = User.builder()
                 .name(request.getName())
+                .username(request.getUsername())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .rawPassword(request.getPassword())
@@ -140,5 +146,37 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
 
         log.info("Password reset successfully");
+    }
+
+    @Override
+    @Transactional
+    public void updateProfile(UpdateProfileRequest request, Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        if (!user.getUsername().equals(request.getUsername()) && userRepository.existsByUsername(request.getUsername())) {
+            throw new DuplicateResourceException("User", "username", request.getUsername());
+        }
+
+        user.setName(request.getName());
+        user.setUsername(request.getUsername());
+        userRepository.save(user);
+        log.info("Profile updated for user: {}", user.getEmail());
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(ChangePasswordRequest request, Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new BadRequestException("Current password is incorrect");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setRawPassword(request.getNewPassword());
+        userRepository.save(user);
+        log.info("Password changed for user: {}", user.getEmail());
     }
 }

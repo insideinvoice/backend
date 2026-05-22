@@ -5,10 +5,12 @@
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/admin/dto/UpdatePasswordRequest.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/admin/dto/UserWithPasswordResponse.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/auth/controller/AuthController.java
+/Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/auth/dto/request/ChangePasswordRequest.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/auth/dto/request/ForgotPasswordRequest.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/auth/dto/request/LoginRequest.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/auth/dto/request/ResetPasswordRequest.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/auth/dto/request/SignupRequest.java
+/Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/auth/dto/request/UpdateProfileRequest.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/auth/dto/response/ApiResponse.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/auth/dto/response/JwtResponse.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/auth/entity/Role.java
@@ -32,6 +34,10 @@
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/config/AuditAwareImpl.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/config/DataSeeder.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/config/OpenApiConfig.java
+/Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/contact/controller/ContactController.java
+/Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/contact/dto/ContactRequest.java
+/Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/contact/entity/Contact.java
+/Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/contact/repository/ContactRepository.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/customer/controller/CustomerController.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/customer/dto/request/CreateCustomerRequest.java
 /Users/mohammedjawadsaleem17/Documents/Inside_Invoice/Inside-Invoice-backend/src/main/java/com/insideinvoice/customer/dto/request/UpdateCustomerRequest.java
