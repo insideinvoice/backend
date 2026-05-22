@@ -18,16 +18,18 @@ public class JwtResponse {
     private Long userId;
     private String name;
     private String email;
+    private String role;
     private Long businessId;
     private boolean businessSetupCompleted;
 
     public JwtResponse(String accessToken, Long userId, String name, String email,
-                       Long businessId, boolean businessSetupCompleted) {
+                       String role, Long businessId, boolean businessSetupCompleted) {
         this.accessToken = accessToken;
         this.tokenType = "Bearer";
         this.userId = userId;
         this.name = name;
         this.email = email;
+        this.role = role;
         this.businessId = businessId;
         this.businessSetupCompleted = businessSetupCompleted;
     }

@@ -2,6 +2,7 @@ package com.insideinvoice.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.NonNull;
@@ -33,10 +34,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     @NonNull FilterChain filterChain)
             throws ServletException, IOException {
 
-        try {
-            String jwt = extractJwtFromRequest(request);
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-            if (StringUtils.hasText(jwt) && jwtTokenProvider.validateToken(jwt)) {
+        try {
+            String jwt = extractValidJwt(request);
+
+            if (StringUtils.hasText(jwt)) {
                 Long userId = jwtTokenProvider.getUserIdFromToken(jwt);
                 UserDetails userDetails = customUserDetailsService.loadUserById(userId);
 
@@ -54,11 +60,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private String extractJwtFromRequest(HttpServletRequest request) {
+    private String extractValidJwt(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
+            String token = bearerToken.substring(7);
+            if (jwtTokenProvider.validateToken(token)) {
+                return token;
+            }
+            log.warn("Authorization header token invalid, trying cookie");
         }
+
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("jwt".equals(cookie.getName())) {
+                    String token = cookie.getValue();
+                    if (jwtTokenProvider.validateToken(token)) {
+                        return token;
+                    }
+                    log.warn("Cookie JWT also invalid for {}", request.getRequestURI());
+                }
+            }
+        }
+
         return null;
     }
 }

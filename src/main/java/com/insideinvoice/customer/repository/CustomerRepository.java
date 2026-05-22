@@ -16,4 +16,6 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     boolean existsByEmailAndBusinessId(String email, Long businessId);
 
     boolean existsByIdAndBusinessId(Long id, Long businessId);
+
+    void deleteByBusinessId(Long businessId);
 }

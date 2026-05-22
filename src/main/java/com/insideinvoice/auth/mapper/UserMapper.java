@@ -14,6 +14,7 @@ public class UserMapper {
                 .userId(user.getId())
                 .name(user.getName())
                 .email(user.getEmail())
+                .role(user.getRole().name())
                 .businessId(user.getBusinessId())
                 .businessSetupCompleted(user.isBusinessSetupCompleted())
                 .build();

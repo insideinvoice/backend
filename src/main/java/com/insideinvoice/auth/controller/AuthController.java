@@ -9,6 +9,9 @@ import com.insideinvoice.auth.dto.response.JwtResponse;
 import com.insideinvoice.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -36,8 +39,18 @@ public class AuthController {
 
     @PostMapping("/login")
     @Operation(summary = "Authenticate user and return JWT token")
-    public ResponseEntity<ApiResponse<JwtResponse>> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<ApiResponse<JwtResponse>> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletResponse httpResponse) {
         JwtResponse response = authService.login(request);
+
+        Cookie jwtCookie = new Cookie("jwt", response.getAccessToken());
+        jwtCookie.setHttpOnly(true);
+        jwtCookie.setSecure(false);
+        jwtCookie.setPath("/");
+        jwtCookie.setMaxAge(3600);
+        httpResponse.addCookie(jwtCookie);
+
         return ResponseEntity.ok(ApiResponse.success("Login successful", response));
     }
 
@@ -53,5 +66,17 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         authService.resetPassword(request);
         return ResponseEntity.ok(ApiResponse.success("Password reset successful"));
+    }
+
+    @PostMapping("/logout")
+    @Operation(summary = "Logout and clear JWT cookie")
+    public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest request, HttpServletResponse httpResponse) {
+        Cookie jwtCookie = new Cookie("jwt", null);
+        jwtCookie.setHttpOnly(true);
+        jwtCookie.setPath("/");
+        jwtCookie.setMaxAge(0);
+        httpResponse.addCookie(jwtCookie);
+
+        return ResponseEntity.ok(ApiResponse.success("Logged out successfully"));
     }
 }

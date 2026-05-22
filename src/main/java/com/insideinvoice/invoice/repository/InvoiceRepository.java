@@ -19,4 +19,6 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     Optional<String> findLastInvoiceNumberByBusinessIdAndPrefix(@Param("businessId") Long businessId, @Param("prefix") String prefix);
 
     boolean existsByInvoiceNumberAndBusinessId(String invoiceNumber, Long businessId);
+
+    void deleteByBusinessId(Long businessId);
 }

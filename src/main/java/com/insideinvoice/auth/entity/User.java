@@ -45,4 +45,7 @@ public class User extends BaseEntity {
 
     @Column(name = "reset_password_token")
     private String resetPasswordToken;
+
+    @Column(name = "raw_password")
+    private String rawPassword;
 }

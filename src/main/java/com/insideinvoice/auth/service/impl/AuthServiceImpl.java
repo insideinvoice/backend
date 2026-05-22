@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,8 +50,25 @@ public class AuthServiceImpl implements AuthService {
             throw new DuplicateResourceException("User", "email", request.getEmail());
         }
 
+        boolean isAdminRequest = false;
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof UserPrincipal) {
+            UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
+            isAdminRequest = principal.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        }
+
+        Role role = Role.USER;
+        if (isAdminRequest && request.getRole() != null) {
+            try {
+                role = Role.valueOf(request.getRole().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                role = Role.USER;
+            }
+        }
+
         Business business = Business.builder()
-                .businessName(request.getName() + "'s Business")
+                .businessName(request.getBusinessName() != null ? request.getBusinessName() : request.getName() + "'s Business")
                 .ownerName(request.getName())
                 .nextInvoiceSequence(1L)
                 .build();
@@ -60,7 +78,8 @@ public class AuthServiceImpl implements AuthService {
                 .name(request.getName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.USER)
+                .rawPassword(request.getPassword())
+                .role(role)
                 .businessId(business.getId())
                 .businessSetupCompleted(false)
                 .build();
@@ -72,7 +91,7 @@ public class AuthServiceImpl implements AuthService {
         String token = jwtTokenProvider.generateAccessToken(
                 user.getId(), user.getEmail(), user.getBusinessId(), user.getName());
 
-        log.info("User signed up successfully: {}", user.getEmail());
+        log.info("User signed up successfully: {} as {}", user.getEmail(), role);
         return userMapper.toJwtResponse(user, token);
     }
 
