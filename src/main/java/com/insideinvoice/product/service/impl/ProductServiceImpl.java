@@ -1,0 +1,91 @@
+package com.insideinvoice.product.service.impl;
+
+import com.insideinvoice.common.dto.PagedResponse;
+import com.insideinvoice.exception.ResourceNotFoundException;
+import com.insideinvoice.product.dto.request.CreateProductRequest;
+import com.insideinvoice.product.dto.request.UpdateProductRequest;
+import com.insideinvoice.product.dto.response.ProductResponse;
+import com.insideinvoice.product.entity.Product;
+import com.insideinvoice.product.mapper.ProductMapper;
+import com.insideinvoice.product.repository.ProductRepository;
+import com.insideinvoice.product.service.ProductService;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class ProductServiceImpl implements ProductService {
+
+    private static final Logger log = LoggerFactory.getLogger(ProductServiceImpl.class);
+
+    private final ProductRepository productRepository;
+    private final ProductMapper productMapper;
+
+    @Override
+    @Transactional
+    public ProductResponse createProduct(CreateProductRequest request, Long businessId) {
+        Product product = productMapper.toEntity(request, businessId);
+        product = productRepository.save(product);
+
+        log.info("Product created: {} for businessId: {}", product.getId(), businessId);
+        return productMapper.toResponse(product);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PagedResponse<ProductResponse> getAllProducts(Long businessId, int page, int size, String sortBy, String sortDir) {
+        Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
+                ? Sort.by(sortBy).ascending()
+                : Sort.by(sortBy).descending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+        Page<Product> products = productRepository.findByBusinessId(businessId, pageable);
+
+        return PagedResponse.<ProductResponse>builder()
+                .content(products.getContent().stream().map(productMapper::toResponse).toList())
+                .page(products.getNumber())
+                .size(products.getSize())
+                .totalElements(products.getTotalElements())
+                .totalPages(products.getTotalPages())
+                .last(products.isLast())
+                .first(products.isFirst())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductResponse getProduct(Long id, Long businessId) {
+        Product product = productRepository.findByIdAndBusinessId(id, businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
+        return productMapper.toResponse(product);
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse updateProduct(Long id, UpdateProductRequest request, Long businessId) {
+        Product product = productRepository.findByIdAndBusinessId(id, businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
+
+        productMapper.updateEntity(product, request);
+        product = productRepository.save(product);
+
+        log.info("Product updated: {} for businessId: {}", id, businessId);
+        return productMapper.toResponse(product);
+    }
+
+    @Override
+    @Transactional
+    public void deleteProduct(Long id, Long businessId) {
+        Product product = productRepository.findByIdAndBusinessId(id, businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
+        productRepository.delete(product);
+
+        log.info("Product deleted: {} for businessId: {}", id, businessId);
+    }
+}
