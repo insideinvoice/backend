@@ -61,4 +61,7 @@ public class Business extends BaseEntity {
     @Column(name = "next_invoice_sequence", nullable = false)
     @Builder.Default
     private Long nextInvoiceSequence = 1L;
+
+    @Column(name = "signature", columnDefinition = "TEXT")
+    private String signature;
 }

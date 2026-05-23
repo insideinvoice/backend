@@ -61,7 +61,15 @@ public class InvoiceServiceImpl implements InvoiceService {
             }
         }
 
-        String invoiceNumber = invoiceNumberGenerator.generateNextInvoiceNumber(businessId);
+        String invoiceNumber;
+        if (request.getInvoiceNumber() != null && !request.getInvoiceNumber().isBlank()) {
+            if (invoiceRepository.existsByInvoiceNumberAndBusinessId(request.getInvoiceNumber(), businessId)) {
+                throw new BadRequestException("Invoice number " + request.getInvoiceNumber() + " already exists");
+            }
+            invoiceNumber = request.getInvoiceNumber();
+        } else {
+            invoiceNumber = invoiceNumberGenerator.generateNextInvoiceNumber(businessId);
+        }
 
         Invoice invoice = invoiceMapper.toEntity(request, invoiceNumber, businessId, userId);
         invoice = invoiceRepository.save(invoice);
@@ -106,6 +114,71 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public InvoiceResponse getInvoiceById(Long id) {
+        Invoice invoice = invoiceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
+
+        String customerName = customerRepository.findById(invoice.getCustomerId())
+                .map(Customer::getName)
+                .orElse("Unknown");
+        return invoiceMapper.toResponse(invoice, customerName);
+    }
+
+    @Override
+    @Transactional
+    public InvoiceResponse updateInvoiceById(Long id, UpdateInvoiceRequest request) {
+        Invoice invoice = invoiceRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
+
+        Customer customer = customerRepository.findById(request.getCustomerId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
+
+        InvoiceType invoiceType;
+        try {
+            invoiceType = InvoiceType.valueOf(request.getInvoiceType());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Invalid invoice type: " + request.getInvoiceType());
+        }
+
+        InvoiceStatus status;
+        try {
+            status = InvoiceStatus.valueOf(request.getStatus());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Invalid invoice status: " + request.getStatus());
+        }
+
+        invoice.setCustomerId(request.getCustomerId());
+        invoice.setInvoiceType(invoiceType);
+        invoice.setInvoiceDate(request.getInvoiceDate());
+        invoice.setDueDate(request.getDueDate());
+        invoice.setPaymentTerms(request.getPaymentTerms());
+        invoice.setNotes(request.getNotes());
+        invoice.setStatus(status);
+        invoice.setPlaceOfSupply(request.getPlaceOfSupply());
+        invoice.setDeliveryNote(request.getDeliveryNote());
+        invoice.setDeliveryNoteDate(request.getDeliveryNoteDate());
+        invoice.setReferenceNumber(request.getReferenceNumber());
+        invoice.setBuyerOrderNumber(request.getBuyerOrderNumber());
+        invoice.setDispatchDocNumber(request.getDispatchDocNumber());
+        invoice.setDispatchedThrough(request.getDispatchedThrough());
+        invoice.setTermsOfDelivery(request.getTermsOfDelivery());
+        invoice.setOtherReferences(request.getOtherReferences());
+        invoice.setDestination(request.getDestination());
+
+        invoice.getItems().clear();
+        for (InvoiceItemRequest itemRequest : request.getItems()) {
+            invoice.getItems().add(invoiceMapper.toInvoiceItem(itemRequest, invoice));
+        }
+
+        invoiceMapper.calculateInvoiceTotals(invoice);
+        invoice = invoiceRepository.save(invoice);
+
+        log.info("Invoice updated by admin: {}", invoice.getInvoiceNumber());
+        return invoiceMapper.toResponse(invoice, customer.getName());
+    }
+
+    @Override
     @Transactional
     public InvoiceResponse updateInvoice(Long id, UpdateInvoiceRequest request, Long businessId) {
         Invoice invoice = invoiceRepository.findByIdAndBusinessId(id, businessId)
@@ -137,6 +210,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setStatus(status);
         invoice.setPlaceOfSupply(request.getPlaceOfSupply());
         invoice.setDeliveryNote(request.getDeliveryNote());
+        invoice.setDeliveryNoteDate(request.getDeliveryNoteDate());
         invoice.setReferenceNumber(request.getReferenceNumber());
         invoice.setBuyerOrderNumber(request.getBuyerOrderNumber());
         invoice.setDispatchDocNumber(request.getDispatchDocNumber());

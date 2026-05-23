@@ -30,6 +30,7 @@ public class BusinessResponse {
     private String pincode;
     private String invoicePrefix;
     private Long nextInvoiceSequence;
+    private String signature;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

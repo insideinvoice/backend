@@ -7,11 +7,22 @@ import com.insideinvoice.auth.dto.response.ApiResponse;
 import com.insideinvoice.auth.entity.Role;
 import com.insideinvoice.auth.entity.User;
 import com.insideinvoice.auth.repository.UserRepository;
+import com.insideinvoice.business.dto.response.BusinessResponse;
+import com.insideinvoice.business.entity.Business;
+import com.insideinvoice.business.mapper.BusinessMapper;
 import com.insideinvoice.business.repository.BusinessRepository;
+import com.insideinvoice.customer.dto.response.CustomerResponse;
+import com.insideinvoice.customer.mapper.CustomerMapper;
 import com.insideinvoice.customer.repository.CustomerRepository;
 import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
+import com.insideinvoice.customer.entity.Customer;
+import com.insideinvoice.invoice.dto.request.UpdateInvoiceRequest;
+import com.insideinvoice.invoice.dto.response.InvoiceResponse;
+import com.insideinvoice.invoice.entity.Invoice;
+import com.insideinvoice.invoice.mapper.InvoiceMapper;
 import com.insideinvoice.invoice.repository.InvoiceRepository;
+import com.insideinvoice.invoice.service.InvoiceService;
 import com.insideinvoice.product.repository.ProductRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,8 +42,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/admin")
@@ -49,6 +65,12 @@ public class AdminController {
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final PasswordEncoder passwordEncoder;
+    private final BusinessMapper businessMapper;
+    private final InvoiceMapper invoiceMapper;
+    @jakarta.persistence.PersistenceContext
+    private EntityManager entityManager;
+    private final InvoiceService invoiceService;
+    private final CustomerMapper customerMapper;
 
     @GetMapping("/users")
     @Operation(summary = "Get all users with passwords (Admin only)")
@@ -101,6 +123,183 @@ public class AdminController {
                 .build();
 
         return ResponseEntity.ok(ApiResponse.success("Admin stats retrieved", stats));
+    }
+
+    @GetMapping("/analytics")
+    @Operation(summary = "Get monthly growth analytics (Admin only)")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAnalytics() {
+        Map<String, Object> result = new LinkedHashMap<>();
+
+        // Monthly user signups
+        Query userQuery = entityManager.createNativeQuery(
+            "SELECT TO_CHAR(date_trunc('month', created_at), 'YYYY-MM') AS month, COUNT(*) AS count " +
+            "FROM users GROUP BY date_trunc('month', created_at) ORDER BY month");
+        List<Object[]> userRows = userQuery.getResultList();
+        List<Map<String, Object>> usersByMonth = userRows.stream().map(r -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("month", r[0]);
+            m.put("count", r[1]);
+            return m;
+        }).toList();
+
+        // Monthly invoices created
+        Query invQuery = entityManager.createNativeQuery(
+            "SELECT TO_CHAR(date_trunc('month', created_at), 'YYYY-MM') AS month, COUNT(*) AS count " +
+            "FROM invoices GROUP BY date_trunc('month', created_at) ORDER BY month");
+        List<Map<String, Object>> invoicesByMonth = ((List<Object[]>) invQuery.getResultList()).stream().map(r -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("month", r[0]);
+            m.put("count", r[1]);
+            return m;
+        }).toList();
+
+        // Monthly revenue (sum of grand_total where status != 'DRAFT' and status != 'CANCELLED')
+        Query revQuery = entityManager.createNativeQuery(
+            "SELECT TO_CHAR(date_trunc('month', created_at), 'YYYY-MM') AS month, COALESCE(SUM(grand_total), 0) AS revenue " +
+            "FROM invoices WHERE status NOT IN ('DRAFT', 'CANCELLED') GROUP BY date_trunc('month', created_at) ORDER BY month");
+        List<Map<String, Object>> revenueByMonth = ((List<Object[]>) revQuery.getResultList()).stream().map(r -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("month", r[0]);
+            m.put("revenue", r[1]);
+            return m;
+        }).toList();
+
+        // Monthly customer additions
+        Query custQuery = entityManager.createNativeQuery(
+            "SELECT TO_CHAR(date_trunc('month', created_at), 'YYYY-MM') AS month, COUNT(*) AS count " +
+            "FROM customers GROUP BY date_trunc('month', created_at) ORDER BY month");
+        List<Map<String, Object>> customersByMonth = ((List<Object[]>) custQuery.getResultList()).stream().map(r -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("month", r[0]);
+            m.put("count", r[1]);
+            return m;
+        }).toList();
+
+        // Monthly business registrations
+        Query bizQuery = entityManager.createNativeQuery(
+            "SELECT TO_CHAR(date_trunc('month', created_at), 'YYYY-MM') AS month, COUNT(*) AS count " +
+            "FROM businesses GROUP BY date_trunc('month', created_at) ORDER BY month");
+        List<Map<String, Object>> businessesByMonth = ((List<Object[]>) bizQuery.getResultList()).stream().map(r -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("month", r[0]);
+            m.put("count", r[1]);
+            return m;
+        }).toList();
+
+        result.put("usersByMonth", usersByMonth);
+        result.put("invoicesByMonth", invoicesByMonth);
+        result.put("revenueByMonth", revenueByMonth);
+        result.put("customersByMonth", customersByMonth);
+        result.put("businessesByMonth", businessesByMonth);
+
+        // Invoices by status per month
+        Query invStatusQuery = entityManager.createNativeQuery(
+            "SELECT TO_CHAR(date_trunc('month', created_at), 'YYYY-MM') AS month, status, COUNT(*) AS count " +
+            "FROM invoices GROUP BY date_trunc('month', created_at), status ORDER BY month, status");
+        List<Object[]> invStatusRows = invStatusQuery.getResultList();
+        // Group by month
+        Map<String, Map<String, Long>> statusByMonth = new LinkedHashMap<>();
+        for (Object[] row : invStatusRows) {
+            String month = (String) row[0];
+            String status = (String) row[1];
+            Long count = ((Number) row[2]).longValue();
+            statusByMonth.computeIfAbsent(month, k -> new LinkedHashMap<>()).put(status, count);
+        }
+        List<Map<String, Object>> invoicesByStatus = new java.util.ArrayList<>();
+        for (Map.Entry<String, Map<String, Long>> entry : statusByMonth.entrySet()) {
+            Map<String, Object> m = new HashMap<>();
+            m.put("month", entry.getKey());
+            m.putAll(entry.getValue());
+            invoicesByStatus.add(m);
+        }
+        result.put("invoicesByStatus", invoicesByStatus);
+
+        return ResponseEntity.ok(ApiResponse.success("Analytics retrieved", result));
+    }
+
+    @GetMapping("/businesses")
+    @Operation(summary = "Get all registered businesses (Admin only)")
+    public ResponseEntity<ApiResponse<List<BusinessResponse>>> getAllBusinesses() {
+        List<Business> businesses = businessRepository.findAll();
+        List<BusinessResponse> result = businesses.stream()
+                .map(businessMapper::toResponse)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success("Businesses retrieved", result));
+    }
+
+    @GetMapping("/businesses/{businessId}/invoices")
+    @Operation(summary = "Get all invoices for a business (Admin only)")
+    public ResponseEntity<ApiResponse<List<InvoiceResponse>>> getBusinessInvoices(
+            @PathVariable Long businessId) {
+        List<Invoice> invoices = invoiceRepository.findAllByBusinessId(businessId);
+        List<InvoiceResponse> result = invoices.stream()
+                .map(invoice -> {
+                    String customerName = customerRepository.findById(invoice.getCustomerId())
+                            .map(Customer::getName)
+                            .orElse("Unknown");
+                    return invoiceMapper.toResponse(invoice, customerName);
+                })
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success("Business invoices retrieved", result));
+    }
+
+    @GetMapping("/invoices")
+    @Operation(summary = "Get all invoices across all businesses (Admin only)")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllInvoices() {
+        List<Invoice> invoices = invoiceRepository.findAll(
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        List<Map<String, Object>> result = invoices.stream().map(inv -> {
+            String customerName = customerRepository.findById(inv.getCustomerId())
+                    .map(com.insideinvoice.customer.entity.Customer::getName)
+                    .orElse("Unknown");
+            String businessName = businessRepository.findById(inv.getBusinessId())
+                    .map(com.insideinvoice.business.entity.Business::getBusinessName)
+                    .orElse("Unknown");
+            String ownerName = userRepository.findById(inv.getCreatedBy())
+                    .map(com.insideinvoice.auth.entity.User::getName)
+                    .orElse("Unknown");
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", inv.getId());
+            m.put("invoiceNumber", inv.getInvoiceNumber());
+            m.put("invoiceType", inv.getInvoiceType().name());
+            m.put("customerId", inv.getCustomerId());
+            m.put("customerName", customerName);
+            m.put("businessName", businessName);
+            m.put("ownerName", ownerName);
+            m.put("invoiceDate", inv.getInvoiceDate().toString());
+            m.put("dueDate", inv.getDueDate().toString());
+            m.put("grandTotal", inv.getGrandTotal());
+            m.put("status", inv.getStatus().name());
+            m.put("placeOfSupply", inv.getPlaceOfSupply());
+            m.put("destination", inv.getDestination());
+            return m;
+        }).toList();
+        return ResponseEntity.ok(ApiResponse.success("Invoices retrieved", result));
+    }
+
+    @GetMapping("/invoices/{id}")
+    @Operation(summary = "Get invoice by ID (Admin only)")
+    public ResponseEntity<ApiResponse<InvoiceResponse>> getInvoice(@PathVariable Long id) {
+        InvoiceResponse response = invoiceService.getInvoiceById(id);
+        return ResponseEntity.ok(ApiResponse.success("Invoice retrieved", response));
+    }
+
+    @PutMapping("/invoices/{id}")
+    @Operation(summary = "Update invoice by ID (Admin only)")
+    public ResponseEntity<ApiResponse<InvoiceResponse>> updateInvoice(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateInvoiceRequest request) {
+        InvoiceResponse response = invoiceService.updateInvoiceById(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Invoice updated", response));
+    }
+
+    @GetMapping("/customers")
+    @Operation(summary = "Get all customers across all businesses (Admin only)")
+    public ResponseEntity<ApiResponse<List<CustomerResponse>>> getAllCustomers() {
+        List<CustomerResponse> result = customerRepository.findAll().stream()
+                .map(customerMapper::toResponse)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success("Customers retrieved", result));
     }
 
     @PutMapping("/users/{id}/password")

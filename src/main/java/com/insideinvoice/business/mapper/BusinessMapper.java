@@ -43,6 +43,7 @@ public class BusinessMapper {
                 .pincode(business.getPincode())
                 .invoicePrefix(business.getInvoicePrefix())
                 .nextInvoiceSequence(business.getNextInvoiceSequence())
+                .signature(business.getSignature())
                 .createdAt(business.getCreatedAt())
                 .updatedAt(business.getUpdatedAt())
                 .build();

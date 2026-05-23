@@ -45,6 +45,8 @@ public class UpdateInvoiceRequest {
 
     private String deliveryNote;
 
+    private LocalDate deliveryNoteDate;
+
     private String referenceNumber;
 
     private String buyerOrderNumber;

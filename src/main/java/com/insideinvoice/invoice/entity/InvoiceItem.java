@@ -37,6 +37,9 @@ public class InvoiceItem {
     @Column(name = "product_id")
     private Long productId;
 
+    @Column(name = "sno")
+    private Integer sno;
+
     @Column(name = "item_name", nullable = false)
     private String itemName;
 

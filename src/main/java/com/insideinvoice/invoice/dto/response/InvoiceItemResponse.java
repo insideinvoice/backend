@@ -17,6 +17,7 @@ public class InvoiceItemResponse {
 
     private Long id;
     private Long productId;
+    private Integer sno;
     private String itemName;
     private String hsn;
     private BigDecimal qty;

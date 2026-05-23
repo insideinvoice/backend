@@ -11,4 +11,6 @@ public interface BusinessService {
     BusinessResponse getBusiness(Long businessId);
 
     BusinessResponse updateBusiness(Long businessId, BusinessUpdateRequest request);
+
+    void updateSignature(Long businessId, String base64Signature);
 }

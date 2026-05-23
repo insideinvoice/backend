@@ -82,6 +82,9 @@ public class Invoice extends BaseEntity {
     @Column(name = "delivery_note")
     private String deliveryNote;
 
+    @Column(name = "delivery_note_date")
+    private LocalDate deliveryNoteDate;
+
     @Column(name = "reference_number")
     private String referenceNumber;
 

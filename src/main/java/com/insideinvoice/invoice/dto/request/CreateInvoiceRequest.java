@@ -42,6 +42,8 @@ public class CreateInvoiceRequest {
 
     private String deliveryNote;
 
+    private LocalDate deliveryNoteDate;
+
     private String referenceNumber;
 
     private String buyerOrderNumber;
@@ -55,6 +57,8 @@ public class CreateInvoiceRequest {
     private String otherReferences;
 
     private String destination;
+
+    private String invoiceNumber;
 
     @Valid
     @NotEmpty(message = "At least one invoice item is required")

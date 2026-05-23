@@ -12,13 +12,20 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.util.Base64;
 
 @RestController
 @RequestMapping("/business")
@@ -54,5 +61,27 @@ public class BusinessController {
             @CurrentUser UserPrincipal currentUser) {
         BusinessResponse response = businessService.updateBusiness(currentUser.getBusinessId(), request);
         return ResponseEntity.ok(ApiResponse.success("Business updated successfully", response));
+    }
+
+    @PostMapping(value = "/signature", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload signature image (max 1MB)")
+    public ResponseEntity<ApiResponse<String>> uploadSignature(
+            @RequestParam("file") MultipartFile file,
+            @CurrentUser UserPrincipal currentUser) throws IOException {
+        if (file.getSize() > 1_048_576) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("File size must not exceed 1MB"));
+        }
+        String base64 = Base64.getEncoder().encodeToString(file.getBytes());
+        businessService.updateSignature(currentUser.getBusinessId(), base64);
+        return ResponseEntity.ok(ApiResponse.success("Signature uploaded successfully", base64));
+    }
+
+    @DeleteMapping("/signature")
+    @Operation(summary = "Remove signature")
+    public ResponseEntity<ApiResponse<Void>> removeSignature(
+            @CurrentUser UserPrincipal currentUser) {
+        businessService.updateSignature(currentUser.getBusinessId(), null);
+        return ResponseEntity.ok(ApiResponse.success("Signature removed"));
     }
 }

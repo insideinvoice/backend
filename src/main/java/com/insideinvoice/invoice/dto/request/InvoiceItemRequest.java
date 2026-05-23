@@ -22,6 +22,8 @@ public class InvoiceItemRequest {
 
     private Long productId;
 
+    private Integer sno;
+
     @NotBlank(message = "Item name is required")
     @Size(max = 255, message = "Item name must not exceed 255 characters")
     private String itemName;

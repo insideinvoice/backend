@@ -77,4 +77,14 @@ public class BusinessServiceImpl implements BusinessService {
         log.info("Business updated: {}", businessId);
         return businessMapper.toResponse(business);
     }
+
+    @Override
+    @Transactional
+    public void updateSignature(Long businessId, String base64Signature) {
+        Business business = businessRepository.findById(businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Business", "id", businessId));
+        business.setSignature(base64Signature);
+        businessRepository.save(business);
+        log.info("Signature updated for businessId: {}", businessId);
+    }
 }

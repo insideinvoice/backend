@@ -33,6 +33,7 @@ public class InvoiceResponse {
     private String status;
     private String placeOfSupply;
     private String deliveryNote;
+    private LocalDate deliveryNoteDate;
     private String referenceNumber;
     private String buyerOrderNumber;
     private String dispatchDocNumber;

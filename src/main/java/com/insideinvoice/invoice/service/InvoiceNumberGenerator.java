@@ -10,6 +10,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Year;
+
 @Component
 @RequiredArgsConstructor
 public class InvoiceNumberGenerator {
@@ -23,14 +25,10 @@ public class InvoiceNumberGenerator {
         Business business = businessRepository.findByIdWithLock(businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Business", "id", businessId));
 
-        if (business.getInvoicePrefix() == null || business.getInvoicePrefix().isBlank()) {
-            throw new BadRequestException("Invoice prefix not configured for this business");
-        }
-
-        String prefix = business.getInvoicePrefix();
         Long sequence = business.getNextInvoiceSequence();
+        int year = Year.now().getValue();
 
-        String invoiceNumber = String.format("%s-%03d", prefix.toUpperCase(), sequence);
+        String invoiceNumber = String.format("INV-%d-%03d", year, sequence);
 
         business.setNextInvoiceSequence(sequence + 1);
         businessRepository.save(business);
