@@ -31,6 +31,11 @@ public class BusinessResponse {
     private String invoicePrefix;
     private Long nextInvoiceSequence;
     private String signature;
+    private String bankName;
+    private String accountNo;
+    private String branch;
+    private String ifsc;
+    private String bankAddress;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

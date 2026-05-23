@@ -72,6 +72,11 @@ public class BusinessServiceImpl implements BusinessService {
         if (request.getCountry() != null) business.setCountry(request.getCountry());
         if (request.getPincode() != null) business.setPincode(request.getPincode());
         if (request.getInvoicePrefix() != null) business.setInvoicePrefix(request.getInvoicePrefix());
+        if (request.getBankName() != null) business.setBankName(request.getBankName());
+        if (request.getAccountNo() != null) business.setAccountNo(request.getAccountNo());
+        if (request.getBranch() != null) business.setBranch(request.getBranch());
+        if (request.getIfsc() != null) business.setIfsc(request.getIfsc());
+        if (request.getBankAddress() != null) business.setBankAddress(request.getBankAddress());
 
         business = businessRepository.save(business);
         log.info("Business updated: {}", businessId);

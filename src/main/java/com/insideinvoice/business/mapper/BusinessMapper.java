@@ -22,6 +22,11 @@ public class BusinessMapper {
                 .country(request.getCountry())
                 .pincode(request.getPincode())
                 .invoicePrefix(request.getInvoicePrefix())
+                .bankName(request.getBankName())
+                .accountNo(request.getAccountNo())
+                .branch(request.getBranch())
+                .ifsc(request.getIfsc())
+                .bankAddress(request.getBankAddress())
                 .nextInvoiceSequence(1L)
                 .build();
     }
@@ -44,6 +49,11 @@ public class BusinessMapper {
                 .invoicePrefix(business.getInvoicePrefix())
                 .nextInvoiceSequence(business.getNextInvoiceSequence())
                 .signature(business.getSignature())
+                .bankName(business.getBankName())
+                .accountNo(business.getAccountNo())
+                .branch(business.getBranch())
+                .ifsc(business.getIfsc())
+                .bankAddress(business.getBankAddress())
                 .createdAt(business.getCreatedAt())
                 .updatedAt(business.getUpdatedAt())
                 .build();
@@ -62,5 +72,10 @@ public class BusinessMapper {
         if (request.getCountry() != null) business.setCountry(request.getCountry());
         if (request.getPincode() != null) business.setPincode(request.getPincode());
         if (request.getInvoicePrefix() != null) business.setInvoicePrefix(request.getInvoicePrefix());
+        if (request.getBankName() != null) business.setBankName(request.getBankName());
+        if (request.getAccountNo() != null) business.setAccountNo(request.getAccountNo());
+        if (request.getBranch() != null) business.setBranch(request.getBranch());
+        if (request.getIfsc() != null) business.setIfsc(request.getIfsc());
+        if (request.getBankAddress() != null) business.setBankAddress(request.getBankAddress());
     }
 }

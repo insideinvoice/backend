@@ -45,4 +45,14 @@ public class BusinessSetupRequest {
     @Size(min = 1, max = 10, message = "Invoice prefix must be between 1 and 10 characters")
     @Pattern(regexp = "^[A-Za-z0-9-]+$", message = "Invoice prefix must be alphanumeric with hyphens only")
     private String invoicePrefix;
+
+    private String bankName;
+
+    private String accountNo;
+
+    private String branch;
+
+    private String ifsc;
+
+    private String bankAddress;
 }

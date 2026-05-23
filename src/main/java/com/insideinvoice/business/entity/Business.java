@@ -64,4 +64,19 @@ public class Business extends BaseEntity {
 
     @Column(name = "signature", columnDefinition = "TEXT")
     private String signature;
+
+    @Column(name = "bank_name")
+    private String bankName;
+
+    @Column(name = "account_no")
+    private String accountNo;
+
+    @Column(name = "branch")
+    private String branch;
+
+    @Column(name = "ifsc")
+    private String ifsc;
+
+    @Column(name = "bank_address")
+    private String bankAddress;
 }
