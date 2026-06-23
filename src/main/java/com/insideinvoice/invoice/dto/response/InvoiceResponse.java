@@ -19,6 +19,7 @@ import java.util.List;
 public class InvoiceResponse {
 
     private Long id;
+    private Long businessId;
     private String invoiceNumber;
     private String invoiceType;
     private Long customerId;

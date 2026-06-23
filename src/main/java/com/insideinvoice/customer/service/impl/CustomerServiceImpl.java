@@ -8,8 +8,8 @@ import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.customer.mapper.CustomerMapper;
 import com.insideinvoice.customer.repository.CustomerRepository;
 import com.insideinvoice.customer.service.CustomerService;
-import com.insideinvoice.exception.DuplicateResourceException;
 import com.insideinvoice.exception.ResourceNotFoundException;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,15 +32,43 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional
     public CustomerResponse createCustomer(CreateCustomerRequest request, Long businessId) {
-        if (request.getEmail() != null && customerRepository.existsByEmailAndBusinessId(request.getEmail(), businessId)) {
-            throw new DuplicateResourceException("Customer", "email", request.getEmail());
+        if (request.getPhone() != null) {
+            Optional<Customer> existingByPhone = customerRepository.findByPhoneAndBusinessId(request.getPhone(), businessId);
+            if (existingByPhone.isPresent()) {
+                Customer existing = updateExistingCustomer(existingByPhone.get(), request);
+                existing = customerRepository.save(existing);
+                log.info("Customer updated (duplicate phone): {} for businessId: {}", existing.getId(), businessId);
+                return customerMapper.toResponse(existing);
+            }
+        }
+        if (request.getEmail() != null) {
+            Optional<Customer> existingByEmail = customerRepository.findByEmailAndBusinessId(request.getEmail(), businessId);
+            if (existingByEmail.isPresent()) {
+                Customer existing = updateExistingCustomer(existingByEmail.get(), request);
+                existing = customerRepository.save(existing);
+                log.info("Customer updated (duplicate email): {} for businessId: {}", existing.getId(), businessId);
+                return customerMapper.toResponse(existing);
+            }
         }
 
         Customer customer = customerMapper.toEntity(request, businessId);
         customer = customerRepository.save(customer);
-
         log.info("Customer created: {} for businessId: {}", customer.getId(), businessId);
         return customerMapper.toResponse(customer);
+    }
+
+    private Customer updateExistingCustomer(Customer existing, CreateCustomerRequest request) {
+        existing.setName(request.getName());
+        if (request.getEmail() != null) existing.setEmail(request.getEmail());
+        if (request.getPhone() != null) existing.setPhone(request.getPhone());
+        existing.setBillingAddress(request.getBillingAddress());
+        existing.setShippingAddress(request.getShippingAddress());
+        existing.setGstIn(request.getGstIn());
+        existing.setCity(request.getCity());
+        existing.setState(request.getState());
+        existing.setCountry(request.getCountry());
+        existing.setPincode(request.getPincode());
+        return existing;
     }
 
     @Override
@@ -82,6 +110,25 @@ public class CustomerServiceImpl implements CustomerService {
 
         log.info("Customer updated: {} for businessId: {}", id, businessId);
         return customerMapper.toResponse(customer);
+    }
+
+    @Override
+    public CustomerResponse findCustomerByEmailOrPhone(String email, String phone, Long businessId) {
+        if (phone != null && !phone.isBlank()) {
+            Optional<Customer> byPhone = customerRepository.findByPhoneAndBusinessId(phone, businessId);
+            if (byPhone.isPresent()) {
+                log.info("Customer found by phone: {} for businessId: {}", phone, businessId);
+                return customerMapper.toResponse(byPhone.get());
+            }
+        }
+        if (email != null && !email.isBlank()) {
+            Optional<Customer> byEmail = customerRepository.findByEmailAndBusinessId(email, businessId);
+            if (byEmail.isPresent()) {
+                log.info("Customer found by email: {} for businessId: {}", email, businessId);
+                return customerMapper.toResponse(byEmail.get());
+            }
+        }
+        throw new ResourceNotFoundException("Customer", "phone", phone != null ? phone : email);
     }
 
     @Override

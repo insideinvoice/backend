@@ -7,11 +7,13 @@ import com.insideinvoice.customer.dto.request.CreateCustomerRequest;
 import com.insideinvoice.customer.dto.request.UpdateCustomerRequest;
 import com.insideinvoice.customer.dto.response.CustomerResponse;
 import com.insideinvoice.customer.service.CustomerService;
+import com.insideinvoice.exception.ResourceNotFoundException;
 import com.insideinvoice.security.CurrentUser;
 import com.insideinvoice.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -56,7 +58,23 @@ public class CustomerController {
         return ResponseEntity.ok(ApiResponse.success("Customers retrieved successfully", response));
     }
 
-    @GetMapping("/{id}")
+    @PostMapping("/check")
+    @Operation(summary = "Find customer by email or phone")
+    public ResponseEntity<ApiResponse<CustomerResponse>> checkCustomer(
+            @RequestBody Map<String, String> body,
+            @CurrentUser UserPrincipal currentUser) {
+        try {
+            String email = body.get("email");
+            String phone = body.get("phone");
+            CustomerResponse response = customerService.findCustomerByEmailOrPhone(email, phone, currentUser.getBusinessId());
+            return ResponseEntity.ok(ApiResponse.success("Customer found", response));
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.success("Customer not found", null));
+        }
+    }
+
+    @GetMapping("/{id:\\d+}")
     @Operation(summary = "Get customer by ID")
     public ResponseEntity<ApiResponse<CustomerResponse>> getCustomer(
             @PathVariable Long id,
@@ -65,7 +83,7 @@ public class CustomerController {
         return ResponseEntity.ok(ApiResponse.success("Customer retrieved successfully", response));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{id:\\d+}")
     @Operation(summary = "Update customer")
     public ResponseEntity<ApiResponse<CustomerResponse>> updateCustomer(
             @PathVariable Long id,
@@ -75,7 +93,7 @@ public class CustomerController {
         return ResponseEntity.ok(ApiResponse.success("Customer updated successfully", response));
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id:\\d+}")
     @Operation(summary = "Delete customer")
     public ResponseEntity<ApiResponse<Void>> deleteCustomer(
             @PathVariable Long id,

@@ -16,4 +16,6 @@ public interface CustomerService {
     CustomerResponse updateCustomer(Long id, UpdateCustomerRequest request, Long businessId);
 
     void deleteCustomer(Long id, Long businessId);
+
+    CustomerResponse findCustomerByEmailOrPhone(String email, String phone, Long businessId);
 }

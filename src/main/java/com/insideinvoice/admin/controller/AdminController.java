@@ -227,6 +227,14 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success("Businesses retrieved", result));
     }
 
+    @GetMapping("/businesses/{id}")
+    @Operation(summary = "Get business by ID (Admin only)")
+    public ResponseEntity<ApiResponse<BusinessResponse>> getBusiness(@PathVariable Long id) {
+        Business business = businessRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Business not found with id: " + id));
+        return ResponseEntity.ok(ApiResponse.success("Business retrieved", businessMapper.toResponse(business)));
+    }
+
     @GetMapping("/businesses/{businessId}/invoices")
     @Operation(summary = "Get all invoices for a business (Admin only)")
     public ResponseEntity<ApiResponse<List<InvoiceResponse>>> getBusinessInvoices(

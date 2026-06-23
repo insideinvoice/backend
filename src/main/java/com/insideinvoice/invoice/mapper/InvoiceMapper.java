@@ -101,6 +101,7 @@ public class InvoiceMapper {
 
         return InvoiceResponse.builder()
                 .id(invoice.getId())
+                .businessId(invoice.getBusinessId())
                 .invoiceNumber(invoice.getInvoiceNumber())
                 .invoiceType(invoice.getInvoiceType().name())
                 .customerId(invoice.getCustomerId())
