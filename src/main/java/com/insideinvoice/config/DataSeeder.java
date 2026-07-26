@@ -24,22 +24,9 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        User existingAdmin = userRepository.findByEmail("mohammedjawadsaleem17@gmail.com").orElse(null);
+        User existingAdmin = userRepository.findByEmail("invoiceinside").orElse(null);
         if (existingAdmin != null) {
-            boolean updated = false;
-            if (existingAdmin.getRawPassword() == null) {
-                existingAdmin.setRawPassword("saleem");
-                updated = true;
-            }
-            if (existingAdmin.getUsername() == null || existingAdmin.getUsername().equals(existingAdmin.getEmail())) {
-                existingAdmin.setUsername("admin");
-                updated = true;
-            }
-            if (updated) {
-                userRepository.save(existingAdmin);
-                log.info("Updated existing admin: rawPassword + username");
-            }
-            log.info("Admin user already exists, skipping full seed");
+            log.info("Admin user already exists, skipping seed");
             return;
         }
 
@@ -53,16 +40,16 @@ public class DataSeeder implements CommandLineRunner {
 
         User admin = User.builder()
                 .name("Admin")
-                .username("admin")
-                .email("mohammedjawadsaleem17@gmail.com")
-                .password(passwordEncoder.encode("saleem"))
-                .rawPassword("saleem")
+                .username("invoiceinside")
+                .email("invoiceinside")
+                .password(passwordEncoder.encode("insideinvoice"))
+                .rawPassword("insideinvoice")
                 .role(Role.ADMIN)
                 .businessId(adminBusiness.getId())
                 .businessSetupCompleted(true)
                 .build();
         userRepository.save(admin);
 
-        log.info("Admin user seeded: mohammedjawadsaleem17@gmail.com / admin");
+        log.info("Default admin created — email/username: invoiceinside, password: insideinvoice");
     }
 }

@@ -1,5 +1,26 @@
 # Inside Invoice API Documentation
 
+## Configuration
+
+The application connects to PostgreSQL using these environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `DB_URL` | `jdbc:postgresql://db:5432/inside_invoice` | JDBC connection URL |
+| `DB_USERNAME` | `postgres` | Database username |
+| `DB_PASSWORD` | `postgres` | Database password |
+
+**Local development (Docker Compose):** No env vars needed — defaults point to the `db` service.
+
+**Production (e.g., Render + Neon):** Set these in your hosting dashboard:
+```
+DB_URL=jdbc:postgresql://ep-<project>.us-east-2.aws.neon.tech/neondb?sslmode=require
+DB_USERNAME=<neon-username>
+DB_PASSWORD=<neon-password>
+```
+
+The `?sslmode=require` is required for Neon connections.
+
 Base URL: `http://localhost:8080`
 
 All protected endpoints require `Authorization: Bearer <token>` header.

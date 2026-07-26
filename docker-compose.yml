@@ -24,9 +24,9 @@ services:
       dockerfile: Dockerfile
     container_name: inside-invoice-backend
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/inside_invoice
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
+      DB_URL: jdbc:postgresql://db:5432/inside_invoice
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
       APP_BASE_URL: http://localhost:8080
     ports:
       - "8080:8080"
