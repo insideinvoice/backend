@@ -13,8 +13,8 @@ public final class Constants {
     public static final String CLAIM_USER_ID = "userId";
     public static final String CLAIM_USER_NAME = "userName";
 
-    public static final String API_AUTH = "/auth/**";
-    public static final String API_CONTACT = "/contact/**";
+    public static final String API_AUTH = "/api/auth/**";
+    public static final String API_CONTACT = "/api/contact/**";
     public static final String API_SWAGGER = "/swagger-ui/**";
     public static final String API_API_DOCS = "/v3/api-docs/**";
     public static final String API_ACTUATOR = "/actuator/**";

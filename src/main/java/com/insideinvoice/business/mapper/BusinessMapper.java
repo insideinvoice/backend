@@ -27,6 +27,7 @@ public class BusinessMapper {
                 .branch(request.getBranch())
                 .ifsc(request.getIfsc())
                 .bankAddress(request.getBankAddress())
+                .upiId(request.getUpiId())
                 .nextInvoiceSequence(1L)
                 .build();
     }
@@ -54,6 +55,7 @@ public class BusinessMapper {
                 .branch(business.getBranch())
                 .ifsc(business.getIfsc())
                 .bankAddress(business.getBankAddress())
+                .upiId(business.getUpiId())
                 .createdAt(business.getCreatedAt())
                 .updatedAt(business.getUpdatedAt())
                 .build();
@@ -77,5 +79,6 @@ public class BusinessMapper {
         if (request.getBranch() != null) business.setBranch(request.getBranch());
         if (request.getIfsc() != null) business.setIfsc(request.getIfsc());
         if (request.getBankAddress() != null) business.setBankAddress(request.getBankAddress());
+        if (request.getUpiId() != null) business.setUpiId(request.getUpiId());
     }
 }

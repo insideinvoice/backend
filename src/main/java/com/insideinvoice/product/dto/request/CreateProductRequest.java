@@ -36,6 +36,6 @@ public class CreateProductRequest {
 
     @NotNull(message = "GST percentage is required")
     @DecimalMin(value = "0.00", message = "GST percentage must be at least 0")
-    @DecimalMax(value = "100.00", message = "GST percentage must not exceed 100")
+    @DecimalMax(value = "40.00", message = "GST percentage must not exceed 40")
     private BigDecimal gstPercentage;
 }

@@ -79,4 +79,7 @@ public class Business extends BaseEntity {
 
     @Column(name = "bank_address")
     private String bankAddress;
+
+    @Column(name = "upi_id", length = 100)
+    private String upiId;
 }

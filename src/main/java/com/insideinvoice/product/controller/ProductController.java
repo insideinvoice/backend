@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/products")
+@RequestMapping("/api/products")
 @RequiredArgsConstructor
 @Tag(name = "Products", description = "Product management APIs")
 public class ProductController {
@@ -73,6 +73,19 @@ public class ProductController {
             @CurrentUser UserPrincipal currentUser) {
         ProductResponse response = productService.updateProduct(id, request, currentUser.getBusinessId());
         return ResponseEntity.ok(ApiResponse.success("Product updated successfully", response));
+    }
+
+    @GetMapping("/by-hsn/{hsn}")
+    @Operation(summary = "Find product by HSN/SAC code")
+    public ResponseEntity<ApiResponse<ProductResponse>> findByHsn(
+            @PathVariable String hsn,
+            @CurrentUser UserPrincipal currentUser) {
+        try {
+            ProductResponse response = productService.findByHsn(hsn, currentUser.getBusinessId());
+            return ResponseEntity.ok(ApiResponse.success("Product found", response));
+        } catch (com.insideinvoice.exception.ResourceNotFoundException e) {
+            return ResponseEntity.ok(ApiResponse.success("No product found with this HSN", null));
+        }
     }
 
     @DeleteMapping("/{id}")

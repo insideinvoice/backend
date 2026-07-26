@@ -28,7 +28,7 @@ import java.io.IOException;
 import java.util.Base64;
 
 @RestController
-@RequestMapping("/business")
+@RequestMapping("/api/business")
 @RequiredArgsConstructor
 @Tag(name = "Business", description = "Business management APIs")
 public class BusinessController {

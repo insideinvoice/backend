@@ -36,6 +36,7 @@ public class BusinessResponse {
     private String branch;
     private String ifsc;
     private String bankAddress;
+    private String upiId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

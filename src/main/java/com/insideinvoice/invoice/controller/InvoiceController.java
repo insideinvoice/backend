@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/invoices")
+@RequestMapping("/api/invoices")
 @RequiredArgsConstructor
 @Tag(name = "Invoices", description = "Invoice management APIs")
 public class InvoiceController {

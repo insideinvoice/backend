@@ -16,4 +16,6 @@ public interface ProductService {
     ProductResponse updateProduct(Long id, UpdateProductRequest request, Long businessId);
 
     void deleteProduct(Long id, Long businessId);
+
+    ProductResponse findByHsn(String hsn, Long businessId);
 }

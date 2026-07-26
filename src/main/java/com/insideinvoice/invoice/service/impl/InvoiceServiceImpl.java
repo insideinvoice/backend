@@ -67,6 +67,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 throw new BadRequestException("Invoice number " + request.getInvoiceNumber() + " already exists");
             }
             invoiceNumber = request.getInvoiceNumber();
+            invoiceNumberGenerator.reserveNextSequence(businessId);
         } else {
             invoiceNumber = invoiceNumberGenerator.generateNextInvoiceNumber(businessId);
         }
@@ -148,6 +149,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             throw new BadRequestException("Invalid invoice status: " + request.getStatus());
         }
 
+        invoice.setInvoiceNumber(request.getInvoiceNumber());
         invoice.setCustomerId(request.getCustomerId());
         invoice.setInvoiceType(invoiceType);
         invoice.setInvoiceDate(request.getInvoiceDate());
@@ -165,6 +167,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setTermsOfDelivery(request.getTermsOfDelivery());
         invoice.setOtherReferences(request.getOtherReferences());
         invoice.setDestination(request.getDestination());
+        invoice.setPaymentMode(request.getPaymentMode());
 
         invoice.getItems().clear();
         for (InvoiceItemRequest itemRequest : request.getItems()) {
@@ -201,6 +204,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             throw new BadRequestException("Invalid invoice status: " + request.getStatus());
         }
 
+        invoice.setInvoiceNumber(request.getInvoiceNumber());
         invoice.setCustomerId(request.getCustomerId());
         invoice.setInvoiceType(invoiceType);
         invoice.setInvoiceDate(request.getInvoiceDate());
@@ -218,6 +222,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setTermsOfDelivery(request.getTermsOfDelivery());
         invoice.setOtherReferences(request.getOtherReferences());
         invoice.setDestination(request.getDestination());
+        invoice.setPaymentMode(request.getPaymentMode());
 
         invoice.getItems().clear();
         for (InvoiceItemRequest itemRequest : request.getItems()) {

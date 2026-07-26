@@ -38,6 +38,7 @@ public class InvoiceMapper {
                 .termsOfDelivery(request.getTermsOfDelivery())
                 .otherReferences(request.getOtherReferences())
                 .destination(request.getDestination())
+                .paymentMode(request.getPaymentMode())
                 .createdBy(userId)
                 .build();
 
@@ -124,6 +125,7 @@ public class InvoiceMapper {
                 .termsOfDelivery(invoice.getTermsOfDelivery())
                 .otherReferences(invoice.getOtherReferences())
                 .destination(invoice.getDestination())
+                .paymentMode(invoice.getPaymentMode())
                 .createdBy(invoice.getCreatedBy())
                 .createdAt(invoice.getCreatedAt())
                 .updatedAt(invoice.getUpdatedAt())

@@ -22,15 +22,13 @@ public class UpdateCustomerRequest {
     @Email(message = "Email must be valid")
     private String email;
 
-    @Pattern(regexp = "^[+]?[0-9]{10,15}$", message = "Phone must be a valid phone number")
+    @Pattern(regexp = "^[0-9]{10}$", message = "Phone must be exactly 10 digits")
     private String phone;
 
     private String billingAddress;
 
     private String shippingAddress;
 
-    @Pattern(regexp = "^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$",
-            message = "GSTIN must be a valid GST identification number")
     private String gstIn;
 
     private String city;

@@ -43,6 +43,7 @@ public class InvoiceResponse {
     private String otherReferences;
     private String destination;
     private Long createdBy;
+    private String paymentMode;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<InvoiceItemResponse> items;

@@ -109,6 +109,9 @@ public class Invoice extends BaseEntity {
     @Column(name = "created_by", nullable = false)
     private Long createdBy;
 
+    @Column(name = "payment_mode", length = 20)
+    private String paymentMode;
+
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<InvoiceItem> items = new ArrayList<>();

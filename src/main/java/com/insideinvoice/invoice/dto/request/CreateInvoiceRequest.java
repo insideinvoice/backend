@@ -60,6 +60,8 @@ public class CreateInvoiceRequest {
 
     private String invoiceNumber;
 
+    private String paymentMode;
+
     @Valid
     @NotEmpty(message = "At least one invoice item is required")
     private List<InvoiceItemRequest> items;

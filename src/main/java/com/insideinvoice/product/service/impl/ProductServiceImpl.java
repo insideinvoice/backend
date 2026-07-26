@@ -9,6 +9,7 @@ import com.insideinvoice.product.entity.Product;
 import com.insideinvoice.product.mapper.ProductMapper;
 import com.insideinvoice.product.repository.ProductRepository;
 import com.insideinvoice.product.service.ProductService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,6 +78,16 @@ public class ProductServiceImpl implements ProductService {
 
         log.info("Product updated: {} for businessId: {}", id, businessId);
         return productMapper.toResponse(product);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductResponse findByHsn(String hsn, Long businessId) {
+        List<Product> products = productRepository.findByBusinessIdAndHsn(businessId, hsn);
+        if (products.isEmpty()) {
+            throw new ResourceNotFoundException("Product", "hsn", hsn);
+        }
+        return productMapper.toResponse(products.get(0));
     }
 
     @Override

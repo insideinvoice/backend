@@ -36,4 +36,15 @@ public class InvoiceNumberGenerator {
         log.debug("Generated invoice number: {} for businessId: {}", invoiceNumber, businessId);
         return invoiceNumber;
     }
+
+    @Transactional
+    public void reserveNextSequence(Long businessId) {
+        Business business = businessRepository.findByIdWithLock(businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Business", "id", businessId));
+
+        business.setNextInvoiceSequence(business.getNextInvoiceSequence() + 1);
+        businessRepository.save(business);
+
+        log.debug("Reserved next invoice sequence for businessId: {}", businessId);
+    }
 }

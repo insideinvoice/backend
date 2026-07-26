@@ -23,6 +23,9 @@ import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.mapper.InvoiceMapper;
 import com.insideinvoice.invoice.repository.InvoiceRepository;
 import com.insideinvoice.invoice.service.InvoiceService;
+import com.insideinvoice.product.dto.response.ProductResponse;
+import com.insideinvoice.product.entity.Product;
+import com.insideinvoice.product.mapper.ProductMapper;
 import com.insideinvoice.product.repository.ProductRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -51,7 +54,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/admin")
+@RequestMapping("/api/admin")
 @RequiredArgsConstructor
 @Tag(name = "Admin", description = "Admin management APIs")
 @PreAuthorize("hasRole('ADMIN')")
@@ -71,6 +74,7 @@ public class AdminController {
     private EntityManager entityManager;
     private final InvoiceService invoiceService;
     private final CustomerMapper customerMapper;
+    private final ProductMapper productMapper;
 
     @GetMapping("/users")
     @Operation(summary = "Get all users with passwords (Admin only)")
@@ -392,5 +396,25 @@ public class AdminController {
 
         log.info("Admin deleted user: {}", user.getEmail());
         return ResponseEntity.ok(ApiResponse.success("User and their data deleted successfully"));
+    }
+
+    @GetMapping("/products")
+    @Operation(summary = "Get all registered products across all businesses (Admin only)")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllProducts() {
+        List<Product> products = productRepository.findAll();
+        List<Map<String, Object>> result = products.stream().map(p -> {
+            String businessName = businessRepository.findById(p.getBusinessId())
+                    .map(Business::getBusinessName).orElse("Unknown");
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", p.getId());
+            m.put("name", p.getName());
+            m.put("hsn", p.getHsn());
+            m.put("rate", p.getRate());
+            m.put("gstPercentage", p.getGstPercentage());
+            m.put("businessName", businessName);
+            m.put("createdAt", p.getCreatedAt() != null ? p.getCreatedAt().toString() : null);
+            return m;
+        }).toList();
+        return ResponseEntity.ok(ApiResponse.success("Products retrieved", result));
     }
 }

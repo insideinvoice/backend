@@ -52,4 +52,6 @@ public class BusinessUpdateRequest {
     private String ifsc;
 
     private String bankAddress;
+
+    private String upiId;
 }

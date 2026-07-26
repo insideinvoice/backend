@@ -55,4 +55,6 @@ public class BusinessSetupRequest {
     private String ifsc;
 
     private String bankAddress;
+
+    private String upiId;
 }

@@ -21,6 +21,8 @@ import java.util.List;
 @Builder
 public class UpdateInvoiceRequest {
 
+    private String invoiceNumber;
+
     @NotNull(message = "Customer ID is required")
     private Long customerId;
 
@@ -60,6 +62,8 @@ public class UpdateInvoiceRequest {
     private String otherReferences;
 
     private String destination;
+
+    private String paymentMode;
 
     @Valid
     @NotEmpty(message = "At least one invoice item is required")
