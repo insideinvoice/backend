@@ -1,0 +1,56 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: inside-invoice-db
+    environment:
+      POSTGRES_DB: inside_invoice
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - inside-invoice-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d inside_invoice"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: inside-invoice-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/inside_invoice
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      APP_BASE_URL: http://localhost:8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - inside-invoice-net
+
+  frontend:
+    build:
+      context: ../inside-invoice
+      dockerfile: Dockerfile
+    container_name: inside-invoice-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - inside-invoice-net
+
+volumes:
+  pgdata:
+
+networks:
+  inside-invoice-net:
+    driver: bridge
