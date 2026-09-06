@@ -7,7 +7,7 @@ spring:
     name: inside-invoice
 
   datasource:
-    url: ${DB_URL:jdbc:postgresql://db:5432/inside_invoice}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/inside_invoice}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
