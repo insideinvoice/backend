@@ -1,1 +1,0 @@
-ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(20);
