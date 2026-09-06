@@ -43,6 +43,7 @@ public class SecurityConfig {
                         .requestMatchers(Constants.API_SWAGGER).permitAll()
                         .requestMatchers(Constants.API_API_DOCS).permitAll()
                         .requestMatchers(Constants.API_ACTUATOR).permitAll()
+                        .requestMatchers(Constants.API_HEALTH).permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

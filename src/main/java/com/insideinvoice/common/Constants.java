@@ -18,6 +18,7 @@ public final class Constants {
     public static final String API_SWAGGER = "/swagger-ui/**";
     public static final String API_API_DOCS = "/v3/api-docs/**";
     public static final String API_ACTUATOR = "/actuator/**";
+    public static final String API_HEALTH = "/api/heartbeat";
 
     public static final int INVOICE_PREFIX_MAX_LENGTH = 10;
 
