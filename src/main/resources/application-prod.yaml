@@ -1,0 +1,43 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://ep-divine-truth-b5i74y8t.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require
+    username: neondb_owner
+    password: npg_BkiTcWR42sya
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  jpa:
+    show-sql: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    schemas: public
+
+app:
+  base-url: ${APP_BASE_URL:https://insideinvoice.app}
+
+backup:
+  enabled: true
+  retention-days: 90
+  timeout-minutes: 30
+  google-drive:
+    root-folder-id: 11Gr5nyaK7VZBJxSwxOmQrkRZPt0sSYyt
+    client-id: 1084673576585-ah2ms2300big3uk4smjmgikav29lbjs9.apps.googleusercontent.com
+    client-secret: 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
+    refresh-token: 1//0g8UpdnP4HBVYCgYIARAAGBASNwF-L9IrJ2PwNDNrROswu-1AdxpcUr5PVyhxp0p8-FoL9RPExx8G61Mw8B7g5xmgTAQOexJRyjE
+  encryption:
+    key: 475cdadfe93e31872f0deddfa46d5b2cd7a04c2600e6c3d6663230f23be0f6b6
+
+logging:
+  level:
+    root: INFO
+    com.insideinvoice: INFO
+    org.springframework.security: INFO
+    org.springframework.web: INFO
