@@ -1,8 +1,8 @@
 spring:
   datasource:
-    url: jdbc:postgresql://ep-divine-truth-b5i74y8t.c-7.us-east-2.aws.neon.tech/neondb?sslmode=require
+    url: jdbc:postgresql://ep-proud-sky-b48o74qh.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require
     username: neondb_owner
-    password: npg_BkiTcWR42sya
+    password: npg_59kryoHMLmSD
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
