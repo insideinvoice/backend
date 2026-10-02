@@ -1,37 +1,166 @@
-# Inside Invoice API Documentation
+# Inside Invoice Backend
 
-## Configuration
+## Quick Start
 
-The application connects to PostgreSQL using these environment variables:
-
-| Variable | Default | Description |
-|---|---|---|
-| `DB_URL` | `jdbc:postgresql://db:5432/inside_invoice` | JDBC connection URL |
-| `DB_USERNAME` | `postgres` | Database username |
-| `DB_PASSWORD` | `postgres` | Database password |
-
-**Local development (Docker Compose):** No env vars needed — defaults point to the `db` service.
-
-**Production (e.g., Render + Neon):** Set these in your hosting dashboard:
+### Local Development
+```bash
+mvn spring-boot:run
 ```
-DB_URL=jdbc:postgresql://ep-<project>.us-east-2.aws.neon.tech/neondb?sslmode=require
-DB_USERNAME=<neon-username>
-DB_PASSWORD=<neon-password>
+Uses `application-local.yaml` — connects to Docker PostgreSQL on port 5433, backup disabled.
+
+### Production
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=prod
 ```
-
-The `?sslmode=require` is required for Neon connections.
-
-Base URL: `http://localhost:8080`
-
-All protected endpoints require `Authorization: Bearer <token>` header.
+Or set in Railway: `SPRING_PROFILES_ACTIVE=prod`
 
 ---
 
-## Authentication
+## Database
 
-### POST /auth/signup
+### Profiles
 
-**Request:**
+| File | Profile | Database | Backup |
+|------|---------|----------|--------|
+| `application-local.yaml` | local | Docker PostgreSQL (localhost:5433) | Off |
+| `application-prod.yaml` | prod | Neon (env vars) | On, 23:00 IST |
+
+### Local Docker Setup
+
+**Create container:**
+```bash
+docker run -d --name insideinvoice-db \
+  -e POSTGRES_DB=inside_invoice \
+  -e POSTGRES_USER=insideinvoice \
+  -e POSTGRES_PASSWORD=invoiceinside \
+  -p 5433:5432 \
+  postgres:18-alpine
+```
+
+**Start/Stop container:**
+```bash
+docker start insideinvoice-db
+docker stop insideinvoice-db
+```
+
+> No changes needed in `application.yaml` after restart. App connects automatically.
+
+### Sync Production Data to Local
+
+**Step 1: Dump from Neon prod (run in terminal):**
+```bash
+/opt/homebrew/opt/postgresql@18/bin/pg_dump "postgresql://neondb_owner:npg_59kryoHMLmSD@ep-proud-sky-b48o74qh.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require" --no-privileges --no-owner -f /tmp/prod.sql
+```
+
+**Step 2: Drop existing tables (if any):**
+```bash
+PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE'; END LOOP; END \$\$;"
+```
+
+**Step 3: Restore to local Docker:**
+```bash
+PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -f /tmp/prod.sql
+```
+
+**Step 4: Verify:**
+```bash
+PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "
+SELECT 'users' as t, COUNT(*) FROM users
+UNION ALL SELECT 'customers', COUNT(*) FROM customers
+UNION ALL SELECT 'invoices', COUNT(*) FROM invoices;
+"
+```
+
+### Check Data
+
+```bash
+# Version
+PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "SELECT version();"
+
+# Users
+PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "SELECT id, name, email FROM users;"
+
+# Customers
+PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "SELECT id, name, email FROM customers;"
+
+# Invoices
+PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "SELECT id, invoice_number, grand_total FROM invoices;"
+
+# All table counts
+PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "
+SELECT 'users' as t, COUNT(*) FROM users
+UNION ALL SELECT 'businesses', COUNT(*) FROM businesses
+UNION ALL SELECT 'customers', COUNT(*) FROM customers
+UNION ALL SELECT 'products', COUNT(*) FROM products
+UNION ALL SELECT 'invoices', COUNT(*) FROM invoices
+UNION ALL SELECT 'invoice_items', COUNT(*) FROM invoice_items;
+"
+```
+
+### Check Dump File
+```bash
+wc -l /tmp/prod.sql
+head -20 /tmp/prod.sql
+```
+
+### Production Environment Variables (Railway)
+```
+DATABASE_URL=jdbc:postgresql://ep-xxx.neon.tech/inside_invoice?sslmode=require
+DATABASE_USERNAME=your_neon_user
+DATABASE_PASSWORD=your_neon_password
+SPRING_PROFILES_ACTIVE=prod
+```
+
+### Backup
+
+- **Schedule:** Daily at 23:00 IST
+- **Storage:** Google Drive (encrypted)
+- **Retention:** 90 days
+- **Encryption:** AES-256-GCM
+
+**Restore backup:**
+```bash
+~/Desktop/restore-backup.sh
+```
+
+**Manual restore:**
+```bash
+# Decrypt
+python3 -c "
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+key = bytes.fromhex('475cdadfe93e31872f0deddfa46d5b2cd7a04c2600e6c3d6663230f23be0f6b6')
+data = open('backup.sql.enc','rb').read()
+plain = AESGCM(key).decrypt(data[4:16], data[16:], None)
+open('backup.sql','wb').write(plain)
+"
+
+# Restore to Neon
+psql "$DATABASE_URL_UNPOOLED" -f backup.sql
+```
+
+### Docker Cleanup
+```bash
+# Remove container
+docker stop insideinvoice-db && docker rm insideinvoice-db
+
+# Remove volume (deletes all data)
+docker volume rm insideinvoice-data
+
+# Remove dump file
+rm /tmp/prod.sql
+```
+
+---
+
+## API
+
+Base URL: `http://localhost:8080`
+
+All protected endpoints require `Authorization: Bearer <token>`.
+
+### Auth
+
+**POST /auth/signup**
 ```json
 {
   "name": "John Doe",
@@ -40,29 +169,7 @@ All protected endpoints require `Authorization: Bearer <token>` header.
 }
 ```
 
-**Response (201):**
-```json
-{
-  "success": true,
-  "message": "User registered successfully",
-  "data": {
-    "accessToken": "eyJhbGciOiJIUzUxMiJ9...",
-    "tokenType": "Bearer",
-    "userId": 1,
-    "name": "John Doe",
-    "email": "john@example.com",
-    "businessId": 1,
-    "businessSetupCompleted": false
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-### POST /auth/login
-
-**Request:**
+**POST /auth/login**
 ```json
 {
   "email": "john@example.com",
@@ -70,74 +177,9 @@ All protected endpoints require `Authorization: Bearer <token>` header.
 }
 ```
 
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Login successful",
-  "data": {
-    "accessToken": "eyJhbGciOiJIUzUxMiJ9...",
-    "tokenType": "Bearer",
-    "userId": 1,
-    "name": "John Doe",
-    "email": "john@example.com",
-    "businessId": 1,
-    "businessSetupCompleted": false
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
+### Business
 
-> **Note:** After signup/login, check `businessSetupCompleted`. If `false`, redirect user to `/business/setup`.
-
----
-
-### POST /auth/forgot-password
-
-**Request:**
-```json
-{
-  "email": "john@example.com"
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "If the email exists, a reset link has been sent",
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-### POST /auth/reset-password
-
-**Request:**
-```json
-{
-  "token": "reset-token-from-email",
-  "password": "newpassword123"
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Password reset successful",
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-## Business
-
-### POST /business/setup
-
-**Request:**
+**POST /business/setup**
 ```json
 {
   "businessName": "Acme Corp",
@@ -146,7 +188,6 @@ All protected endpoints require `Authorization: Bearer <token>` header.
   "email": "contact@acme.com",
   "website": "https://acme.com",
   "addressLine1": "123 Main Road",
-  "addressLine2": "Koramangala",
   "city": "Bangalore",
   "state": "Karnataka",
   "country": "India",
@@ -155,121 +196,16 @@ All protected endpoints require `Authorization: Bearer <token>` header.
 }
 ```
 
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Business setup completed successfully",
-  "data": {
-    "id": 1,
-    "businessName": "Acme Corp",
-    "ownerName": "John Doe",
-    "gstIn": "29ABCDE1234F1Z5",
-    "phone": "+919876543210",
-    "email": "contact@acme.com",
-    "website": "https://acme.com",
-    "addressLine1": "123 Main Road",
-    "addressLine2": "Koramangala",
-    "city": "Bangalore",
-    "state": "Karnataka",
-    "country": "India",
-    "pincode": "560034",
-    "invoicePrefix": "ACME",
-    "nextInvoiceSequence": 2,
-    "createdAt": "2026-05-22T12:00:00",
-    "updatedAt": "2026-05-22T12:00:00"
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
+### Customers
 
----
-
-### GET /business/me
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Business retrieved successfully",
-  "data": {
-    "id": 1,
-    "businessName": "Acme Corp",
-    "ownerName": "John Doe",
-    "gstIn": "29ABCDE1234F1Z5",
-    "phone": "+919876543210",
-    "email": "contact@acme.com",
-    "website": "https://acme.com",
-    "addressLine1": "123 Main Road",
-    "addressLine2": "Koramangala",
-    "city": "Bangalore",
-    "state": "Karnataka",
-    "country": "India",
-    "pincode": "560034",
-    "invoicePrefix": "ACME",
-    "nextInvoiceSequence": 2,
-    "createdAt": "2026-05-22T12:00:00",
-    "updatedAt": "2026-05-22T12:00:00"
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-### PUT /business/update
-
-**Request:**
-```json
-{
-  "businessName": "Acme Corp Pvt Ltd",
-  "phone": "+919999999999",
-  "invoicePrefix": "ACMEPL"
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Business updated successfully",
-  "data": {
-    "id": 1,
-    "businessName": "Acme Corp Pvt Ltd",
-    "ownerName": "John Doe",
-    "gstIn": "29ABCDE1234F1Z5",
-    "phone": "+919999999999",
-    "email": "contact@acme.com",
-    "website": "https://acme.com",
-    "addressLine1": "123 Main Road",
-    "addressLine2": "Koramangala",
-    "city": "Bangalore",
-    "state": "Karnataka",
-    "country": "India",
-    "pincode": "560034",
-    "invoicePrefix": "ACMEPL",
-    "nextInvoiceSequence": 2,
-    "createdAt": "2026-05-22T12:00:00",
-    "updatedAt": "2026-05-22T12:00:01"
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-## Customers
-
-### POST /customers
-
-**Request:**
+**POST /customers**
 ```json
 {
   "name": "Rajesh Kumar",
   "email": "rajesh@example.com",
   "phone": "+919876543210",
-  "billingAddress": "456 Oak Street, Indiranagar",
-  "shippingAddress": "456 Oak Street, Indiranagar",
+  "billingAddress": "456 Oak Street",
+  "shippingAddress": "456 Oak Street",
   "gstIn": "29FGHI5678J2K5",
   "city": "Bangalore",
   "state": "Karnataka",
@@ -278,158 +214,13 @@ All protected endpoints require `Authorization: Bearer <token>` header.
 }
 ```
 
-**Response (201):**
-```json
-{
-  "success": true,
-  "message": "Customer created successfully",
-  "data": {
-    "id": 1,
-    "name": "Rajesh Kumar",
-    "email": "rajesh@example.com",
-    "phone": "+919876543210",
-    "billingAddress": "456 Oak Street, Indiranagar",
-    "shippingAddress": "456 Oak Street, Indiranagar",
-    "gstIn": "29FGHI5678J2K5",
-    "city": "Bangalore",
-    "state": "Karnataka",
-    "country": "India",
-    "pincode": "560038",
-    "createdAt": "2026-05-22T12:00:00",
-    "updatedAt": "2026-05-22T12:00:00"
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
+### Products
 
----
-
-### GET /customers
-
-Query params: `page=0`, `size=10`, `sortBy=createdAt`, `sortDir=desc`
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Customers retrieved successfully",
-  "data": {
-    "content": [
-      {
-        "id": 1,
-        "name": "Rajesh Kumar",
-        "email": "rajesh@example.com",
-        "phone": "+919876543210",
-        "billingAddress": "456 Oak Street, Indiranagar",
-        "shippingAddress": "456 Oak Street, Indiranagar",
-        "gstIn": "29FGHI5678J2K5",
-        "city": "Bangalore",
-        "state": "Karnataka",
-        "country": "India",
-        "pincode": "560038",
-        "createdAt": "2026-05-22T12:00:00",
-        "updatedAt": "2026-05-22T12:00:00"
-      }
-    ],
-    "page": 0,
-    "size": 10,
-    "totalElements": 1,
-    "totalPages": 1,
-    "last": true,
-    "first": true
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-### GET /customers/{id}
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Customer retrieved successfully",
-  "data": {
-    "id": 1,
-    "name": "Rajesh Kumar",
-    "email": "rajesh@example.com",
-    "phone": "+919876543210",
-    "billingAddress": "456 Oak Street, Indiranagar",
-    "shippingAddress": "456 Oak Street, Indiranagar",
-    "gstIn": "29FGHI5678J2K5",
-    "city": "Bangalore",
-    "state": "Karnataka",
-    "country": "India",
-    "pincode": "560038",
-    "createdAt": "2026-05-22T12:00:00",
-    "updatedAt": "2026-05-22T12:00:00"
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-### PUT /customers/{id}
-
-**Request:**
-```json
-{
-  "name": "Rajesh Kumar Updated",
-  "phone": "+919999999999"
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Customer updated successfully",
-  "data": {
-    "id": 1,
-    "name": "Rajesh Kumar Updated",
-    "email": "rajesh@example.com",
-    "phone": "+919999999999",
-    "billingAddress": "456 Oak Street, Indiranagar",
-    "shippingAddress": "456 Oak Street, Indiranagar",
-    "gstIn": "29FGHI5678J2K5",
-    "city": "Bangalore",
-    "state": "Karnataka",
-    "country": "India",
-    "pincode": "560038",
-    "createdAt": "2026-05-22T12:00:00",
-    "updatedAt": "2026-05-22T12:00:01"
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-### DELETE /customers/{id}
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Customer deleted successfully",
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-## Products
-
-### POST /products
-
-**Request:**
+**POST /products**
 ```json
 {
   "name": "1 inch CPVC Pipe",
-  "description": "Chlorinated Polyvinyl Chloride Pipe 1 inch",
+  "description": "Chlorinated Polyvinyl Chloride Pipe",
   "hsn": "39172390",
   "unit": "pcs",
   "rate": 580.00,
@@ -437,138 +228,9 @@ Query params: `page=0`, `size=10`, `sortBy=createdAt`, `sortDir=desc`
 }
 ```
 
-**Response (201):**
-```json
-{
-  "success": true,
-  "message": "Product created successfully",
-  "data": {
-    "id": 1,
-    "name": "1 inch CPVC Pipe",
-    "description": "Chlorinated Polyvinyl Chloride Pipe 1 inch",
-    "hsn": "39172390",
-    "unit": "pcs",
-    "rate": 580.00,
-    "gstPercentage": 18.00,
-    "createdAt": "2026-05-22T12:00:00",
-    "updatedAt": "2026-05-22T12:00:00"
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
+### Invoices
 
----
-
-### GET /products
-
-Query params: `page=0`, `size=10`, `sortBy=createdAt`, `sortDir=desc`
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Products retrieved successfully",
-  "data": {
-    "content": [
-      {
-        "id": 1,
-        "name": "1 inch CPVC Pipe",
-        "description": "Chlorinated Polyvinyl Chloride Pipe 1 inch",
-        "hsn": "39172390",
-        "unit": "pcs",
-        "rate": 580.00,
-        "gstPercentage": 18.00,
-        "createdAt": "2026-05-22T12:00:00",
-        "updatedAt": "2026-05-22T12:00:00"
-      }
-    ],
-    "page": 0,
-    "size": 10,
-    "totalElements": 1,
-    "totalPages": 1,
-    "last": true,
-    "first": true
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-### GET /products/{id}
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Product retrieved successfully",
-  "data": {
-    "id": 1,
-    "name": "1 inch CPVC Pipe",
-    "description": "Chlorinated Polyvinyl Chloride Pipe 1 inch",
-    "hsn": "39172390",
-    "unit": "pcs",
-    "rate": 580.00,
-    "gstPercentage": 18.00,
-    "createdAt": "2026-05-22T12:00:00",
-    "updatedAt": "2026-05-22T12:00:00"
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-### PUT /products/{id}
-
-**Request:**
-```json
-{
-  "rate": 620.00,
-  "gstPercentage": 18.00
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Product updated successfully",
-  "data": {
-    "id": 1,
-    "name": "1 inch CPVC Pipe",
-    "description": "Chlorinated Polyvinyl Chloride Pipe 1 inch",
-    "hsn": "39172390",
-    "unit": "pcs",
-    "rate": 620.00,
-    "gstPercentage": 18.00,
-    "createdAt": "2026-05-22T12:00:00",
-    "updatedAt": "2026-05-22T12:00:01"
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-### DELETE /products/{id}
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Product deleted successfully",
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-## Invoices
-
-### POST /invoices
-
-**Request:**
+**POST /invoices**
 ```json
 {
   "customerId": 1,
@@ -578,14 +240,6 @@ Query params: `page=0`, `size=10`, `sortBy=createdAt`, `sortDir=desc`
   "placeOfSupply": "Karnataka",
   "paymentTerms": "Net 10 Days",
   "notes": "Thank you for your business",
-  "deliveryNote": "Door delivery",
-  "referenceNumber": "PO-2026-001",
-  "buyerOrderNumber": "BO-2026-001",
-  "dispatchDocNumber": "DD-001",
-  "dispatchedThrough": "Self",
-  "termsOfDelivery": "FOB",
-  "otherReferences": "Quotation Q-001",
-  "destination": "Bangalore",
   "items": [
     {
       "productId": 1,
@@ -594,454 +248,23 @@ Query params: `page=0`, `size=10`, `sortBy=createdAt`, `sortDir=desc`
       "qty": 20,
       "rate": 580.00,
       "gstPercentage": 18.00
-    },
-    {
-      "productId": 2,
-      "itemName": "1 inch CPVC Elbow",
-      "hsn": "39172390",
-      "qty": 30,
-      "rate": 30.00,
-      "gstPercentage": 18.00
     }
   ]
 }
 ```
 
-**Response (201):**
-```json
-{
-  "success": true,
-  "message": "Invoice created successfully",
-  "data": {
-    "id": 1,
-    "invoiceNumber": "ACME-001",
-    "invoiceType": "TAX_INVOICE",
-    "customerId": 1,
-    "customerName": "Rajesh Kumar",
-    "invoiceDate": "2026-02-18",
-    "dueDate": "2026-02-28",
-    "subtotal": 12500.00,
-    "taxAmount": 2250.00,
-    "grandTotal": 14750.00,
-    "paymentTerms": "Net 10 Days",
-    "notes": "Thank you for your business",
-    "status": "DRAFT",
-    "placeOfSupply": "Karnataka",
-    "deliveryNote": "Door delivery",
-    "referenceNumber": "PO-2026-001",
-    "buyerOrderNumber": "BO-2026-001",
-    "dispatchDocNumber": "DD-001",
-    "dispatchedThrough": "Self",
-    "termsOfDelivery": "FOB",
-    "otherReferences": "Quotation Q-001",
-    "destination": "Bangalore",
-    "createdBy": 1,
-    "createdAt": "2026-05-22T12:00:00",
-    "updatedAt": "2026-05-22T12:00:00",
-    "items": [
-      {
-        "id": 1,
-        "productId": 1,
-        "itemName": "1 inch CPVC Pipe",
-        "hsn": "39172390",
-        "qty": 20,
-        "rate": 580.00,
-        "gstPercentage": 18.00,
-        "taxableValue": 11600.00,
-        "taxAmount": 2088.00,
-        "total": 13688.00
-      },
-      {
-        "id": 2,
-        "productId": 2,
-        "itemName": "1 inch CPVC Elbow",
-        "hsn": "39172390",
-        "qty": 30,
-        "rate": 30.00,
-        "gstPercentage": 18.00,
-        "taxableValue": 900.00,
-        "taxAmount": 162.00,
-        "total": 1062.00
-      }
-    ]
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
+### Endpoints
 
-> **Backend calculations:**
-> - Item 1: taxableValue = 20 x 580 = 11600, taxAmount = 11600 x 18/100 = 2088, total = 11600 + 2088 = 13688
-> - Item 2: taxableValue = 30 x 30 = 900, taxAmount = 900 x 18/100 = 162, total = 900 + 162 = 1062
-> - subtotal = 11600 + 900 = 12500
-> - taxAmount = 2088 + 162 = 2250
-> - grandTotal = 12500 + 2250 = 14750
-
----
-
-### GET /invoices
-
-Query params: `page=0`, `size=10`, `sortBy=createdAt`, `sortDir=desc`
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Invoices retrieved successfully",
-  "data": {
-    "content": [
-      {
-        "id": 1,
-        "invoiceNumber": "ACME-001",
-        "invoiceType": "TAX_INVOICE",
-        "customerId": 1,
-        "customerName": "Rajesh Kumar",
-        "invoiceDate": "2026-02-18",
-        "dueDate": "2026-02-28",
-        "subtotal": 12500.00,
-        "taxAmount": 2250.00,
-        "grandTotal": 14750.00,
-        "paymentTerms": "Net 10 Days",
-        "notes": "Thank you for your business",
-        "status": "DRAFT",
-        "placeOfSupply": "Karnataka",
-        "deliveryNote": "Door delivery",
-        "referenceNumber": "PO-2026-001",
-        "buyerOrderNumber": "BO-2026-001",
-        "dispatchDocNumber": "DD-001",
-        "dispatchedThrough": "Self",
-        "termsOfDelivery": "FOB",
-        "otherReferences": "Quotation Q-001",
-        "destination": "Bangalore",
-        "createdBy": 1,
-        "createdAt": "2026-05-22T12:00:00",
-        "updatedAt": "2026-05-22T12:00:00",
-        "items": [
-          {
-            "id": 1,
-            "productId": 1,
-            "itemName": "1 inch CPVC Pipe",
-            "hsn": "39172390",
-            "qty": 20,
-            "rate": 580.00,
-            "gstPercentage": 18.00,
-            "taxableValue": 11600.00,
-            "taxAmount": 2088.00,
-            "total": 13688.00
-          },
-          {
-            "id": 2,
-            "productId": 2,
-            "itemName": "1 inch CPVC Elbow",
-            "hsn": "39172390",
-            "qty": 30,
-            "rate": 30.00,
-            "gstPercentage": 18.00,
-            "taxableValue": 900.00,
-            "taxAmount": 162.00,
-            "total": 1062.00
-          }
-        ]
-      }
-    ],
-    "page": 0,
-    "size": 10,
-    "totalElements": 1,
-    "totalPages": 1,
-    "last": true,
-    "first": true
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-### GET /invoices/{id}
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Invoice retrieved successfully",
-  "data": {
-    "id": 1,
-    "invoiceNumber": "ACME-001",
-    "invoiceType": "TAX_INVOICE",
-    "customerId": 1,
-    "customerName": "Rajesh Kumar",
-    "invoiceDate": "2026-02-18",
-    "dueDate": "2026-02-28",
-    "subtotal": 12500.00,
-    "taxAmount": 2250.00,
-    "grandTotal": 14750.00,
-    "paymentTerms": "Net 10 Days",
-    "notes": "Thank you for your business",
-    "status": "DRAFT",
-    "placeOfSupply": "Karnataka",
-    "deliveryNote": "Door delivery",
-    "referenceNumber": "PO-2026-001",
-    "buyerOrderNumber": "BO-2026-001",
-    "dispatchDocNumber": "DD-001",
-    "dispatchedThrough": "Self",
-    "termsOfDelivery": "FOB",
-    "otherReferences": "Quotation Q-001",
-    "destination": "Bangalore",
-    "createdBy": 1,
-    "createdAt": "2026-05-22T12:00:00",
-    "updatedAt": "2026-05-22T12:00:00",
-    "items": [
-      {
-        "id": 1,
-        "productId": 1,
-        "itemName": "1 inch CPVC Pipe",
-        "hsn": "39172390",
-        "qty": 20,
-        "rate": 580.00,
-        "gstPercentage": 18.00,
-        "taxableValue": 11600.00,
-        "taxAmount": 2088.00,
-        "total": 13688.00
-      },
-      {
-        "id": 2,
-        "productId": 2,
-        "itemName": "1 inch CPVC Elbow",
-        "hsn": "39172390",
-        "qty": 30,
-        "rate": 30.00,
-        "gstPercentage": 18.00,
-        "taxableValue": 900.00,
-        "taxAmount": 162.00,
-        "total": 1062.00
-      }
-    ]
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-### PUT /invoices/{id}
-
-**Request:**
-```json
-{
-  "customerId": 1,
-  "invoiceType": "TAX_INVOICE",
-  "invoiceDate": "2026-02-18",
-  "dueDate": "2026-03-10",
-  "placeOfSupply": "Karnataka",
-  "paymentTerms": "Net 20 Days",
-  "notes": "Updated payment terms",
-  "status": "PENDING",
-  "deliveryNote": "Door delivery",
-  "referenceNumber": "PO-2026-001",
-  "buyerOrderNumber": "BO-2026-001",
-  "dispatchDocNumber": "DD-001",
-  "dispatchedThrough": "Self",
-  "termsOfDelivery": "FOB",
-  "otherReferences": "Quotation Q-001",
-  "destination": "Bangalore",
-  "items": [
-    {
-      "productId": 1,
-      "itemName": "1 inch CPVC Pipe",
-      "hsn": "39172390",
-      "qty": 25,
-      "rate": 580.00,
-      "gstPercentage": 18.00
-    },
-    {
-      "productId": 2,
-      "itemName": "1 inch CPVC Elbow",
-      "hsn": "39172390",
-      "qty": 30,
-      "rate": 30.00,
-      "gstPercentage": 18.00
-    }
-  ]
-}
-```
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Invoice updated successfully",
-  "data": {
-    "id": 1,
-    "invoiceNumber": "ACME-001",
-    "invoiceType": "TAX_INVOICE",
-    "customerId": 1,
-    "customerName": "Rajesh Kumar",
-    "invoiceDate": "2026-02-18",
-    "dueDate": "2026-03-10",
-    "subtotal": 15400.00,
-    "taxAmount": 2772.00,
-    "grandTotal": 18172.00,
-    "paymentTerms": "Net 20 Days",
-    "notes": "Updated payment terms",
-    "status": "PENDING",
-    "placeOfSupply": "Karnataka",
-    "deliveryNote": "Door delivery",
-    "referenceNumber": "PO-2026-001",
-    "buyerOrderNumber": "BO-2026-001",
-    "dispatchDocNumber": "DD-001",
-    "dispatchedThrough": "Self",
-    "termsOfDelivery": "FOB",
-    "otherReferences": "Quotation Q-001",
-    "destination": "Bangalore",
-    "createdBy": 1,
-    "createdAt": "2026-05-22T12:00:00",
-    "updatedAt": "2026-05-22T12:00:01",
-    "items": [
-      {
-        "id": 3,
-        "productId": 1,
-        "itemName": "1 inch CPVC Pipe",
-        "hsn": "39172390",
-        "qty": 25,
-        "rate": 580.00,
-        "gstPercentage": 18.00,
-        "taxableValue": 14500.00,
-        "taxAmount": 2610.00,
-        "total": 17110.00
-      },
-      {
-        "id": 4,
-        "productId": 2,
-        "itemName": "1 inch CPVC Elbow",
-        "hsn": "39172390",
-        "qty": 30,
-        "rate": 30.00,
-        "gstPercentage": 18.00,
-        "taxableValue": 900.00,
-        "taxAmount": 162.00,
-        "total": 1062.00
-      }
-    ]
-  },
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-### DELETE /invoices/{id}
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "message": "Invoice deleted successfully",
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-## Health Check
-
-### GET /actuator/health
-
-**Response (200):**
-```json
-{
-  "status": "UP"
-}
-```
-
-### GET /actuator/info
-
-**Response (200):**
-```json
-{
-  "app": {
-    "name": "Inside Invoice",
-    "description": "SaaS Multi-Tenant Invoicing Platform",
-    "version": "1.0.0"
-  }
-}
-```
-
----
-
-## Error Responses
-
-### Validation Error (400)
-```json
-{
-  "timestamp": "2026-05-22T12:00:00",
-  "status": 400,
-  "error": "Validation Failed",
-  "fieldErrors": {
-    "email": "Email must be valid",
-    "name": "Name is required"
-  }
-}
-```
-
-### Not Found (404)
-```json
-{
-  "success": false,
-  "message": "Customer not found with id: '999'",
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
-### Unauthorized (401)
-```json
-{
-  "success": false,
-  "message": "Unauthorized. Please provide a valid JWT token.",
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
-### Forbidden (403) - Cross-Business Access
-```json
-{
-  "success": false,
-  "message": "Business access violation: expected businessId 2 but user belongs to businessId 1",
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
-### Conflict (409) - Duplicate
-```json
-{
-  "success": false,
-  "message": "User already exists with email: 'john@example.com'",
-  "timestamp": "2026-05-22T12:00:00"
-}
-```
-
----
-
-## Invoice Numbering
-
-Format: `{PREFIX}-{SEQUENCE}`
-
-Examples: `ACME-001`, `GE-002`, `ACMEPL-003`
-
-- Each business has its own prefix and sequence counter
-- Sequence auto-increments safely using pessimistic locks
-- Sequence resets per business, not globally
-
-## Invoice Statuses
-
-| Status | Description |
-|--------|-------------|
-| `DRAFT` | Invoice created, not yet finalized |
-| `PENDING` | Invoice sent to customer, awaiting payment |
-| `PAID` | Payment received |
-| `CANCELLED` | Invoice cancelled |
-
-## Invoice Types
-
-| Type | Description |
-|------|-------------|
-| `TAX_INVOICE` | Standard GST tax invoice |
-| `PROFORMA_INVOICE` | Quotation / Proforma invoice |
+| Endpoint | Description |
+|----------|-------------|
+| `POST /auth/signup` | Register user |
+| `POST /auth/login` | Login |
+| `POST /business/setup` | Setup business |
+| `GET /business/me` | Get business |
+| `POST /customers` | Create customer |
+| `GET /customers` | List customers |
+| `POST /products` | Create product |
+| `GET /products` | List products |
+| `POST /invoices` | Create invoice |
+| `GET /invoices` | List invoices |
+| `GET /actuator/health` | Health check |
