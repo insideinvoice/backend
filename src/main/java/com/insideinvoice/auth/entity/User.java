@@ -58,4 +58,10 @@ public class User extends BaseEntity {
 
     @Column(name = "tmp_otp")
     private String tmpOtp;
+
+    @Column(name = "otp_attempts")
+    private Integer otpAttempts;
+
+    @Column(name = "otp_created_at")
+    private java.time.LocalDateTime otpCreatedAt;
 }

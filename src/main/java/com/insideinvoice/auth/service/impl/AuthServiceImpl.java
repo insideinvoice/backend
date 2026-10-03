@@ -34,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.UUID;
 
@@ -42,6 +43,9 @@ import java.util.UUID;
 public class AuthServiceImpl implements AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthServiceImpl.class);
+
+    private static final int OTP_MAX_ATTEMPTS = 5;
+    private static final int OTP_EXPIRY_MINUTES = 10;
 
     private final UserRepository userRepository;
     private final BusinessRepository businessRepository;
@@ -136,6 +140,8 @@ public class AuthServiceImpl implements AuthService {
         if (user != null) {
             String otp = generateOtp();
             user.setTmpOtp(otp);
+            user.setOtpAttempts(0);
+            user.setOtpCreatedAt(LocalDateTime.now());
             userRepository.save(user);
 
             emailService.sendOtpEmail(user.getEmail(), otp);
@@ -149,14 +155,43 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional
     public ApiResponse<Void> verifyOtp(VerifyOtpRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BadRequestException("Invalid or expired OTP"));
 
-        if (user.getTmpOtp() == null || !user.getTmpOtp().equals(request.getOtp())) {
+        if (user.getTmpOtp() == null) {
             throw new BadRequestException("Invalid or expired OTP");
         }
+
+        // Check OTP expiry
+        if (user.getOtpCreatedAt() != null &&
+                user.getOtpCreatedAt().plusMinutes(OTP_EXPIRY_MINUTES).isBefore(LocalDateTime.now())) {
+            user.setTmpOtp(null);
+            user.setOtpAttempts(0);
+            user.setOtpCreatedAt(null);
+            userRepository.save(user);
+            throw new BadRequestException("OTP has expired. Please request a new one.");
+        }
+
+        // Check max attempts
+        int attempts = user.getOtpAttempts() != null ? user.getOtpAttempts() : 0;
+        if (attempts >= OTP_MAX_ATTEMPTS) {
+            user.setTmpOtp(null);
+            user.setOtpAttempts(0);
+            user.setOtpCreatedAt(null);
+            userRepository.save(user);
+            throw new BadRequestException("Too many failed attempts. Please request a new OTP.");
+        }
+
+        if (!user.getTmpOtp().equals(request.getOtp())) {
+            user.setOtpAttempts(attempts + 1);
+            userRepository.save(user);
+            throw new BadRequestException("Invalid or expired OTP");
+        }
+
+        // OTP verified successfully
+        user.setOtpAttempts(0);
+        userRepository.save(user);
 
         log.info("OTP verified for user: {}", user.getEmail());
         return ApiResponse.success("OTP verified");
@@ -172,9 +207,21 @@ public class AuthServiceImpl implements AuthService {
             throw new BadRequestException("Invalid or expired OTP");
         }
 
+        // Check OTP expiry
+        if (user.getOtpCreatedAt() != null &&
+                user.getOtpCreatedAt().plusMinutes(OTP_EXPIRY_MINUTES).isBefore(LocalDateTime.now())) {
+            user.setTmpOtp(null);
+            user.setOtpAttempts(0);
+            user.setOtpCreatedAt(null);
+            userRepository.save(user);
+            throw new BadRequestException("OTP has expired. Please request a new one.");
+        }
+
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setRawPassword(request.getNewPassword());
         user.setTmpOtp(null);
+        user.setOtpAttempts(0);
+        user.setOtpCreatedAt(null);
         user.setMustChangePassword(false);
         user.setResetPasswordToken(null);
         userRepository.save(user);
