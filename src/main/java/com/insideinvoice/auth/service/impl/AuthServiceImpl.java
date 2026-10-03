@@ -3,9 +3,10 @@ package com.insideinvoice.auth.service.impl;
 import com.insideinvoice.auth.dto.request.ChangePasswordRequest;
 import com.insideinvoice.auth.dto.request.ForgotPasswordRequest;
 import com.insideinvoice.auth.dto.request.LoginRequest;
-import com.insideinvoice.auth.dto.request.ResetPasswordRequest;
+import com.insideinvoice.auth.dto.request.ResetPasswordOtpRequest;
 import com.insideinvoice.auth.dto.request.SignupRequest;
 import com.insideinvoice.auth.dto.request.UpdateProfileRequest;
+import com.insideinvoice.auth.dto.request.VerifyOtpRequest;
 import com.insideinvoice.auth.dto.response.ApiResponse;
 import com.insideinvoice.auth.dto.response.JwtResponse;
 import com.insideinvoice.auth.entity.Role;
@@ -50,11 +51,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper userMapper;
     private final EmailService emailService;
 
-    private static final String UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    private static final String LOWERCASE = "abcdefghijklmnopqrstuvwxyz";
-    private static final String NUMBERS = "0123456789";
-    private static final String SPECIAL_CHARS = "!@#$%^&*";
-    private static final int TEMP_PASSWORD_LENGTH = 16;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     @Override
     @Transactional
@@ -133,51 +130,53 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public ApiResponse<Void> forgotPassword(ForgotPasswordRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseGet(() -> {
-                    // Return generic message even if user doesn't exist (prevent account enumeration)
-                    return null;
-                });
+    public ApiResponse<Void> sendOtp(ForgotPasswordRequest request) {
+        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
 
         if (user != null) {
-            // Generate temporary password
-            String temporaryPassword = generateTemporaryPassword();
-            String resetToken = UUID.randomUUID().toString();
-
-            // Hash the temporary password and store it
-            user.setPassword(passwordEncoder.encode(temporaryPassword));
-            user.setResetPasswordToken(passwordEncoder.encode(resetToken));
-            user.setMustChangePassword(true);
+            String otp = generateOtp();
+            user.setTmpOtp(otp);
             userRepository.save(user);
 
-            // Send password reset email via Resend
-            emailService.sendPasswordResetEmail(user.getEmail(), resetToken, temporaryPassword);
-
-            log.info("Password reset requested for user: {}", user.getEmail());
+            emailService.sendOtpEmail(user.getEmail(), otp);
+            log.info("OTP sent to user: {}", user.getEmail());
+        } else {
+            log.info("OTP requested for non-existent email: {}", request.getEmail());
         }
 
-        // Always return generic message (don't reveal if email exists)
-        return ApiResponse.success("If an account exists with this email address, password reset instructions have been sent.");
+        // Always return the same message — don't reveal if email exists
+        return ApiResponse.success("OTP sent to your email.");
     }
 
     @Override
     @Transactional
-    public ApiResponse<Void> resetPassword(ResetPasswordRequest request) {
-        if (request.getToken() == null || request.getToken().isBlank()) {
-            throw new BadRequestException("Reset token is required");
+    public ApiResponse<Void> verifyOtp(VerifyOtpRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new BadRequestException("Invalid or expired OTP"));
+
+        if (user.getTmpOtp() == null || !user.getTmpOtp().equals(request.getOtp())) {
+            throw new BadRequestException("Invalid or expired OTP");
         }
 
-        User user = userRepository.findByResetPasswordToken(request.getToken())
-                .orElseThrow(() -> new BadRequestException("Invalid or expired reset token"));
+        log.info("OTP verified for user: {}", user.getEmail());
+        return ApiResponse.success("OTP verified");
+    }
 
-        if (!user.isMustChangePassword()) {
-            throw new BadRequestException("This token is not for a password reset request");
+    @Override
+    @Transactional
+    public ApiResponse<Void> resetPasswordWithOtp(ResetPasswordOtpRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new BadRequestException("Invalid or expired OTP"));
+
+        if (user.getTmpOtp() == null || !user.getTmpOtp().equals(request.getOtp())) {
+            throw new BadRequestException("Invalid or expired OTP");
         }
 
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setResetPasswordToken(null);
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setRawPassword(request.getNewPassword());
+        user.setTmpOtp(null);
         user.setMustChangePassword(false);
+        user.setResetPasswordToken(null);
         userRepository.save(user);
 
         log.info("Password reset successfully for user: {}", user.getEmail());
@@ -219,35 +218,8 @@ public class AuthServiceImpl implements AuthService {
         return ApiResponse.success("Password changed successfully");
     }
 
-    /**
-     * Generate a cryptographically secure temporary password.
-     * Uses SecureRandom for unpredictable password generation.
-     */
-    private String generateTemporaryPassword() {
-        StringBuilder password = new StringBuilder(TEMP_PASSWORD_LENGTH);
-
-        // Ensure at least one character from each category
-        SecureRandom random = new SecureRandom();
-        password.append(UPPERCASE.charAt(random.nextInt(UPPERCASE.length())));
-        password.append(LOWERCASE.charAt(random.nextInt(LOWERCASE.length())));
-        password.append(NUMBERS.charAt(random.nextInt(NUMBERS.length())));
-        password.append(SPECIAL_CHARS.charAt(random.nextInt(SPECIAL_CHARS.length())));
-
-        // Fill the remaining characters with random choices from all categories
-        String allChars = UPPERCASE + LOWERCASE + NUMBERS + SPECIAL_CHARS;
-        for (int i = 4; i < TEMP_PASSWORD_LENGTH; i++) {
-            password.append(allChars.charAt(random.nextInt(allChars.length())));
-        }
-
-        // Shuffle the password to avoid predictable positions
-        char[] passwordArray = password.toString().toCharArray();
-        for (int i = passwordArray.length - 1; i > 0; i--) {
-            int index = random.nextInt(i + 1);
-            char temp = passwordArray[i];
-            passwordArray[i] = passwordArray[index];
-            passwordArray[index] = temp;
-        }
-
-        return new String(passwordArray);
+    private String generateOtp() {
+        int otp = SECURE_RANDOM.nextInt(900000) + 100000;
+        return String.valueOf(otp);
     }
 }

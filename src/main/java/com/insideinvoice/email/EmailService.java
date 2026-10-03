@@ -24,21 +24,21 @@ public class EmailService {
     @Value("${app.mail.contact-email:insideinvoice87@gmail.com}")
     private String contactEmail;
 
-    public void sendPasswordResetEmail(String toEmail, String resetToken, String temporaryPassword) {
+    public void sendOtpEmail(String toEmail, String otp) {
         if (resendApiKey == null || resendApiKey.isBlank()) {
             log.warn("Resend API key not configured, skipping email send to: {}", toEmail);
             return;
         }
 
         try {
-            String subject = "Your Inside Invoice Temporary Password";
-            String htmlContent = buildPasswordResetHtml(temporaryPassword, resetToken);
-            String textContent = buildPasswordResetText(temporaryPassword, resetToken);
+            String subject = "Your Inside Invoice Verification Code";
+            String htmlContent = buildOtpHtml(otp);
+            String textContent = buildOtpText(otp);
 
             sendViaResend(toEmail, subject, htmlContent, textContent, null);
-            log.info("Password reset email sent to: {}", toEmail);
+            log.info("OTP email sent to: {}", toEmail);
         } catch (Exception e) {
-            log.error("Failed to send password reset email to: {}", toEmail, e);
+            log.error("Failed to send OTP email to: {}", toEmail, e);
         }
     }
 
@@ -94,9 +94,9 @@ public class EmailService {
         }
     }
 
-    // ==================== PASSWORD RESET EMAIL ====================
+    // ==================== OTP EMAIL ====================
 
-    private String buildPasswordResetHtml(String temporaryPassword, String resetToken) {
+    private String buildOtpHtml(String otp) {
         return """
                 <!DOCTYPE html>
                 <html lang="en">
@@ -110,19 +110,19 @@ public class EmailService {
                             <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;border:1px solid #e2e8f0;">
                                 <tr><td style="padding:32px 40px;">
                                     <h2 style="margin:0 0 4px;color:#0f172a;font-size:22px;">Inside Invoice</h2>
-                                    <p style="margin:0 0 20px;color:#64748b;font-size:13px;">Password Reset Request</p>
+                                    <p style="margin:0 0 20px;color:#64748b;font-size:13px;">Password Reset Verification</p>
                                     <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
                                     <p style="margin:0 0 20px;color:#334155;font-size:15px;line-height:1.6;">
-                                        We received a request to reset your password. Use the temporary password below to sign in:
+                                        Use the verification code below to reset your password:
                                     </p>
                                     <table role="presentation" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:0 0 24px;">
-                                        <tr><td>
-                                            <p style="margin:0;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">Temporary Password</p>
-                                            <p style="margin:8px 0 0;font-size:24px;font-weight:bold;color:#0f172a;font-family:monospace;letter-spacing:2px;">%s</p>
+                                        <tr><td align="center">
+                                            <p style="margin:0;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">Verification Code</p>
+                                            <p style="margin:8px 0 0;font-size:32px;font-weight:bold;color:#0f172a;font-family:monospace;letter-spacing:6px;">%s</p>
                                         </td></tr>
                                     </table>
                                     <p style="margin:0 0 24px;color:#64748b;font-size:13px;line-height:1.6;">
-                                        For your security, you will be asked to change this password after signing in. If you did not request this reset, you can safely ignore this email.
+                                        This code expires in 10 minutes. If you did not request this reset, you can safely ignore this email.
                                     </p>
                                     <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0 16px;">
                                     <p style="margin:0 0 4px;color:#94a3b8;font-size:12px;">This is an automated notification from Inside Invoice.</p>
@@ -133,16 +133,15 @@ public class EmailService {
                     </table>
                 </body>
                 </html>
-                """.formatted(temporaryPassword != null ? temporaryPassword : "N/A");
+                """.formatted(otp != null ? otp : "N/A");
     }
 
-    private String buildPasswordResetText(String temporaryPassword, String resetToken) {
-        return "Inside Invoice - Password Reset Request\n" +
-               "================================\n\n" +
-               "We received a request to reset your password.\n" +
-               "Use the temporary password below to sign in:\n\n" +
-               "  Temporary Password: " + (temporaryPassword != null ? temporaryPassword : "N/A") + "\n\n" +
-               "For your security, you will be asked to change this password after signing in.\n" +
+    private String buildOtpText(String otp) {
+        return "Inside Invoice - Password Reset Verification\n" +
+               "=============================================\n\n" +
+               "Use the verification code below to reset your password:\n\n" +
+               "  Verification Code: " + (otp != null ? otp : "N/A") + "\n\n" +
+               "This code expires in 10 minutes.\n" +
                "If you did not request this reset, you can safely ignore this email.\n\n" +
                "This is an automated notification from Inside Invoice.\n" +
                "(c) 2026 Inside Invoice. All rights reserved.\n";

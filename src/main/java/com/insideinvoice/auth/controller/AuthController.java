@@ -3,9 +3,10 @@ package com.insideinvoice.auth.controller;
 import com.insideinvoice.auth.dto.request.ChangePasswordRequest;
 import com.insideinvoice.auth.dto.request.ForgotPasswordRequest;
 import com.insideinvoice.auth.dto.request.LoginRequest;
-import com.insideinvoice.auth.dto.request.ResetPasswordRequest;
+import com.insideinvoice.auth.dto.request.ResetPasswordOtpRequest;
 import com.insideinvoice.auth.dto.request.SignupRequest;
 import com.insideinvoice.auth.dto.request.UpdateProfileRequest;
+import com.insideinvoice.auth.dto.request.VerifyOtpRequest;
 import com.insideinvoice.auth.dto.response.ApiResponse;
 import com.insideinvoice.auth.dto.response.JwtResponse;
 import com.insideinvoice.auth.service.AuthService;
@@ -60,16 +61,23 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    @Operation(summary = "Request password reset link")
-    public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        ApiResponse<Void> response = authService.forgotPassword(request);
+    @Operation(summary = "Send OTP for password reset")
+    public ResponseEntity<ApiResponse<Void>> sendOtp(@Valid @RequestBody ForgotPasswordRequest request) {
+        ApiResponse<Void> response = authService.sendOtp(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/verify-otp")
+    @Operation(summary = "Verify OTP for password reset")
+    public ResponseEntity<ApiResponse<Void>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        ApiResponse<Void> response = authService.verifyOtp(request);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/reset-password")
-    @Operation(summary = "Reset password using token")
-    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        ApiResponse<Void> response = authService.resetPassword(request);
+    @Operation(summary = "Reset password using OTP")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordOtpRequest request) {
+        ApiResponse<Void> response = authService.resetPasswordWithOtp(request);
         return ResponseEntity.ok(response);
     }
 
