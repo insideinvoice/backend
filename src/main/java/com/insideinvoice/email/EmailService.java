@@ -62,7 +62,7 @@ public class EmailService {
 
     private void sendViaResend(String toEmail, String subject, String htmlContent, String textContent, String replyTo) throws Exception {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
-        body.put("from", mailFrom);
+        body.put("from", "Inside Invoice <" + mailFrom + ">");
         body.put("to", new String[]{toEmail});
         body.put("subject", subject);
         body.put("html", htmlContent);
