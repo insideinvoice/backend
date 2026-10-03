@@ -62,15 +62,15 @@ public class AuthController {
     @PostMapping("/forgot-password")
     @Operation(summary = "Request password reset link")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        authService.forgotPassword(request);
-        return ResponseEntity.ok(ApiResponse.success("If the email exists, a reset link has been sent"));
+        ApiResponse<Void> response = authService.forgotPassword(request);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/reset-password")
     @Operation(summary = "Reset password using token")
     public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        authService.resetPassword(request);
-        return ResponseEntity.ok(ApiResponse.success("Password reset successful"));
+        ApiResponse<Void> response = authService.resetPassword(request);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/logout")
@@ -99,7 +99,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> changePassword(
             @Valid @RequestBody ChangePasswordRequest request) {
         UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        authService.changePassword(request, principal.getId());
-        return ResponseEntity.ok(ApiResponse.success("Password changed successfully"));
+        ApiResponse<Void> response = authService.changePassword(request, principal.getId());
+        return ResponseEntity.ok(response);
     }
 }

@@ -17,8 +17,14 @@ spring:
 app:
   jwt:
     secret: 4a6f686e446f6553656372657456657279566572795365637265744b6579466f724a57545369676e696e67416e64456e6372797074696f6e
-    expiration-ms: 21600000
+    expiration-ms: 3600000
+    remember-me-expiration-ms: 604800000
     refresh-expiration-ms: 2592000000
+  mail:
+    resend-api-key: ${RESEND_API_KEY:}
+    from: ${MAIL_FROM:noreply@insideinvoice.com}
+    logo-url: ${INSIDE_INVOICE_LOGO_URL:https://your-public-logo-url}
+    contact-email: ${CONTACT_EMAIL:insideinvoice87@gmail.com}
 
 management:
   endpoints:

@@ -24,20 +24,28 @@ public class JwtTokenProvider {
 
     private final SecretKey secretKey;
     private final long expirationMs;
+    private final long rememberMeExpirationMs;
     private final long refreshExpirationMs;
 
     public JwtTokenProvider(
             @Value("${app.jwt.secret}") String secret,
             @Value("${app.jwt.expiration-ms}") long expirationMs,
+            @Value("${app.jwt.remember-me-expiration-ms}") long rememberMeExpirationMs,
             @Value("${app.jwt.refresh-expiration-ms}") long refreshExpirationMs) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
+        this.rememberMeExpirationMs = rememberMeExpirationMs;
         this.refreshExpirationMs = refreshExpirationMs;
     }
 
     public String generateAccessToken(Long userId, String email, Long businessId, String name) {
+        return generateAccessToken(userId, email, businessId, name, false);
+    }
+
+    public String generateAccessToken(Long userId, String email, Long businessId, String name, boolean rememberMe) {
+        long ttlMs = rememberMe ? rememberMeExpirationMs : expirationMs;
         Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + expirationMs);
+        Date expiryDate = new Date(now.getTime() + ttlMs);
 
         return Jwts.builder()
                 .subject(userId.toString())

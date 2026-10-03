@@ -52,4 +52,7 @@ public class User extends BaseEntity {
 
     @Column(name = "raw_password")
     private String rawPassword;
+
+    @Column(name = "must_change_password")
+    private boolean mustChangePassword;
 }

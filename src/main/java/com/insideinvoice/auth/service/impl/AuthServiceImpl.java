@@ -6,6 +6,7 @@ import com.insideinvoice.auth.dto.request.LoginRequest;
 import com.insideinvoice.auth.dto.request.ResetPasswordRequest;
 import com.insideinvoice.auth.dto.request.SignupRequest;
 import com.insideinvoice.auth.dto.request.UpdateProfileRequest;
+import com.insideinvoice.auth.dto.response.ApiResponse;
 import com.insideinvoice.auth.dto.response.JwtResponse;
 import com.insideinvoice.auth.entity.Role;
 import com.insideinvoice.auth.entity.User;
@@ -19,6 +20,7 @@ import com.insideinvoice.exception.DuplicateResourceException;
 import com.insideinvoice.exception.ResourceNotFoundException;
 import com.insideinvoice.security.JwtTokenProvider;
 import com.insideinvoice.security.UserPrincipal;
+import com.insideinvoice.email.EmailService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.UUID;
 
 @Service
@@ -44,6 +48,13 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final UserMapper userMapper;
+    private final EmailService emailService;
+
+    private static final String UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private static final String LOWERCASE = "abcdefghijklmnopqrstuvwxyz";
+    private static final String NUMBERS = "0123456789";
+    private static final String SPECIAL_CHARS = "!@#$%^&*";
+    private static final int TEMP_PASSWORD_LENGTH = 16;
 
     @Override
     @Transactional
@@ -88,6 +99,7 @@ public class AuthServiceImpl implements AuthService {
                 .role(role)
                 .businessId(business.getId())
                 .businessSetupCompleted(false)
+                .mustChangePassword(false)
                 .build();
         user = userRepository.save(user);
 
@@ -112,7 +124,8 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userPrincipal.getId()));
 
         String token = jwtTokenProvider.generateAccessToken(
-                user.getId(), user.getEmail(), user.getBusinessId(), user.getName());
+                user.getId(), user.getEmail(), user.getBusinessId(), user.getName(),
+                Boolean.TRUE.equals(request.getRememberMe()));
 
         log.info("User logged in successfully: {}", user.getEmail());
         return userMapper.toJwtResponse(user, token);
@@ -120,20 +133,37 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public void forgotPassword(ForgotPasswordRequest request) {
+    public ApiResponse<Void> forgotPassword(ForgotPasswordRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("User", "email", request.getEmail()));
+                .orElseGet(() -> {
+                    // Return generic message even if user doesn't exist (prevent account enumeration)
+                    return null;
+                });
 
-        String resetToken = UUID.randomUUID().toString();
-        user.setResetPasswordToken(passwordEncoder.encode(resetToken));
-        userRepository.save(user);
+        if (user != null) {
+            // Generate temporary password
+            String temporaryPassword = generateTemporaryPassword();
+            String resetToken = UUID.randomUUID().toString();
 
-        log.info("Password reset token generated for user: {}", request.getEmail());
+            // Hash the temporary password and store it
+            user.setPassword(passwordEncoder.encode(temporaryPassword));
+            user.setResetPasswordToken(passwordEncoder.encode(resetToken));
+            user.setMustChangePassword(true);
+            userRepository.save(user);
+
+            // Send password reset email via Resend
+            emailService.sendPasswordResetEmail(user.getEmail(), resetToken, temporaryPassword);
+
+            log.info("Password reset requested for user: {}", user.getEmail());
+        }
+
+        // Always return generic message (don't reveal if email exists)
+        return ApiResponse.success("If an account exists with this email address, password reset instructions have been sent.");
     }
 
     @Override
     @Transactional
-    public void resetPassword(ResetPasswordRequest request) {
+    public ApiResponse<Void> resetPassword(ResetPasswordRequest request) {
         if (request.getToken() == null || request.getToken().isBlank()) {
             throw new BadRequestException("Reset token is required");
         }
@@ -141,11 +171,17 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByResetPasswordToken(request.getToken())
                 .orElseThrow(() -> new BadRequestException("Invalid or expired reset token"));
 
+        if (!user.isMustChangePassword()) {
+            throw new BadRequestException("This token is not for a password reset request");
+        }
+
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setResetPasswordToken(null);
+        user.setMustChangePassword(false);
         userRepository.save(user);
 
-        log.info("Password reset successfully");
+        log.info("Password reset successfully for user: {}", user.getEmail());
+        return ApiResponse.success("Password reset successful");
     }
 
     @Override
@@ -166,7 +202,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public void changePassword(ChangePasswordRequest request, Long userId) {
+    public ApiResponse<Void> changePassword(ChangePasswordRequest request, Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
@@ -176,7 +212,42 @@ public class AuthServiceImpl implements AuthService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setRawPassword(request.getNewPassword());
+        user.setMustChangePassword(false);
         userRepository.save(user);
         log.info("Password changed for user: {}", user.getEmail());
+
+        return ApiResponse.success("Password changed successfully");
+    }
+
+    /**
+     * Generate a cryptographically secure temporary password.
+     * Uses SecureRandom for unpredictable password generation.
+     */
+    private String generateTemporaryPassword() {
+        StringBuilder password = new StringBuilder(TEMP_PASSWORD_LENGTH);
+
+        // Ensure at least one character from each category
+        SecureRandom random = new SecureRandom();
+        password.append(UPPERCASE.charAt(random.nextInt(UPPERCASE.length())));
+        password.append(LOWERCASE.charAt(random.nextInt(LOWERCASE.length())));
+        password.append(NUMBERS.charAt(random.nextInt(NUMBERS.length())));
+        password.append(SPECIAL_CHARS.charAt(random.nextInt(SPECIAL_CHARS.length())));
+
+        // Fill the remaining characters with random choices from all categories
+        String allChars = UPPERCASE + LOWERCASE + NUMBERS + SPECIAL_CHARS;
+        for (int i = 4; i < TEMP_PASSWORD_LENGTH; i++) {
+            password.append(allChars.charAt(random.nextInt(allChars.length())));
+        }
+
+        // Shuffle the password to avoid predictable positions
+        char[] passwordArray = password.toString().toCharArray();
+        for (int i = passwordArray.length - 1; i > 0; i--) {
+            int index = random.nextInt(i + 1);
+            char temp = passwordArray[i];
+            passwordArray[i] = passwordArray[index];
+            passwordArray[index] = temp;
+        }
+
+        return new String(passwordArray);
     }
 }

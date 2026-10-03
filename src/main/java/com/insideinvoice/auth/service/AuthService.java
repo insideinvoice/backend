@@ -6,7 +6,10 @@ import com.insideinvoice.auth.dto.request.LoginRequest;
 import com.insideinvoice.auth.dto.request.ResetPasswordRequest;
 import com.insideinvoice.auth.dto.request.SignupRequest;
 import com.insideinvoice.auth.dto.request.UpdateProfileRequest;
+import com.insideinvoice.auth.dto.response.ApiResponse;
 import com.insideinvoice.auth.dto.response.JwtResponse;
+import org.springframework.security.core.Authentication;
+import java.util.UUID;
 
 public interface AuthService {
 
@@ -14,11 +17,11 @@ public interface AuthService {
 
     JwtResponse login(LoginRequest request);
 
-    void forgotPassword(ForgotPasswordRequest request);
+    ApiResponse<Void> forgotPassword(ForgotPasswordRequest request);
 
-    void resetPassword(ResetPasswordRequest request);
+    ApiResponse<Void> resetPassword(ResetPasswordRequest request);
 
     void updateProfile(UpdateProfileRequest request, Long userId);
 
-    void changePassword(ChangePasswordRequest request, Long userId);
+    ApiResponse<Void> changePassword(ChangePasswordRequest request, Long userId);
 }
