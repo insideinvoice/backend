@@ -15,6 +15,8 @@ public class EmailService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
+    private static final String LOGO_DATA_URI = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxyZWN0IHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiByeD0iNTYiIGZpbGw9InVybCgjZ3JhZDEpIi8+CiAgPGNpcmNsZSBjeD0iMjIwIiBjeT0iMzYiIHI9IjQ4IiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iMC4wNSIvPgogIDxjaXJjbGUgY3g9IjM2IiBjeT0iMjIwIiByPSI2NCIgZmlsbD0id2hpdGUiIG9wYWNpdHk9IjAuMDUiLz4KICA8Y2lyY2xlIGN4PSI5NiIgY3k9IjgwIiByPSIyMCIgZmlsbD0id2hpdGUiLz4KICA8cmVjdCB4PSI3NiIgeT0iMTEyIiB3aWR0aD0iNDAiIGhlaWdodD0iOTYiIHJ4PSIyMCIgZmlsbD0id2hpdGUiLz4KICA8Y2lyY2xlIGN4PSIxNzYiIGN5PSIxMDQiIHI9IjE0LjQiIGZpbGw9IndoaXRlIiBvcGFjaXR5PSIwLjk1Ii8+CiAgPHJlY3QgeD0iMTYxLjYiIHk9IjEzNiIgd2lkdGg9IjI4LjgiIGhlaWdodD0iNzIiIHJ4PSIxNC40IiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iMC45NSIvPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJncmFkMSIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMzMzQxNTU7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iNTAlIiBzdHlsZT0ic3RvcC1jb2xvcjojNDc1NTY5O3N0b3Atb3BhY2l0eToxIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxZTI5M2I7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KPC9zdmc+";
+
     @Value("${app.mail.resend-api-key:}")
     private String resendApiKey;
 
@@ -109,8 +111,17 @@ public class EmailService {
                         <tr><td align="center">
                             <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;border:1px solid #e2e8f0;">
                                 <tr><td style="padding:32px 40px;">
-                                    <h2 style="margin:0 0 4px;color:#0f172a;font-size:22px;">Inside Invoice</h2>
-                                    <p style="margin:0 0 20px;color:#64748b;font-size:13px;">Password Reset Verification</p>
+                                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+                                        <tr>
+                                            <td style="padding-right:12px;vertical-align:middle;">
+                                                <img src="%s" alt="Inside Invoice" width="48" height="48" style="display:block;border-radius:12px;" />
+                                            </td>
+                                            <td style="vertical-align:middle;">
+                                                <h2 style="margin:0;color:#0f172a;font-size:22px;">Inside Invoice</h2>
+                                                <p style="margin:2px 0 0;color:#64748b;font-size:13px;">Password Reset Verification</p>
+                                            </td>
+                                        </tr>
+                                    </table>
                                     <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
                                     <p style="margin:0 0 20px;color:#334155;font-size:15px;line-height:1.6;">
                                         Use the verification code below to reset your password:
@@ -133,7 +144,7 @@ public class EmailService {
                     </table>
                 </body>
                 </html>
-                """.formatted(otp != null ? otp : "N/A");
+                """.formatted(LOGO_DATA_URI, otp != null ? otp : "N/A");
     }
 
     private String buildOtpText(String otp) {
@@ -161,8 +172,17 @@ public class EmailService {
                         <tr><td align="center">
                             <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;border:1px solid #e2e8f0;">
                                 <tr><td style="padding:32px 40px;">
-                                    <h2 style="margin:0 0 4px;color:#0f172a;font-size:22px;">Inside Invoice</h2>
-                                    <p style="margin:0 0 20px;color:#64748b;font-size:13px;">New Enquiry Received</p>
+                                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+                                        <tr>
+                                            <td style="padding-right:12px;vertical-align:middle;">
+                                                <img src="%s" alt="Inside Invoice" width="48" height="48" style="display:block;border-radius:12px;" />
+                                            </td>
+                                            <td style="vertical-align:middle;">
+                                                <h2 style="margin:0;color:#0f172a;font-size:22px;">Inside Invoice</h2>
+                                                <p style="margin:2px 0 0;color:#64748b;font-size:13px;">New Enquiry Received</p>
+                                            </td>
+                                        </tr>
+                                    </table>
                                     <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
                                     <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:bold;">You have a new enquiry from %s</p>
                                     <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 16px;">
@@ -185,6 +205,7 @@ public class EmailService {
                 </body>
                 </html>
                 """.formatted(
+                LOGO_DATA_URI,
                 escapeHtml(name),
                 escapeHtml(name),
                 escapeHtml(email),
