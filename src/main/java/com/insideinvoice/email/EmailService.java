@@ -110,51 +110,67 @@ public class EmailService {
                     <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:32px 16px;">
                         <tr><td align="center">
                             <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;border:1px solid #e2e8f0;">
-                                <tr><td style="padding:32px 40px;">
-                                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+                                <tr><td style="padding:40px;">
+                                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 28px;">
                                         <tr>
-                                            <td style="padding-right:12px;vertical-align:middle;">
-                                                <img src="%s" alt="Inside Invoice" width="48" height="48" style="display:block;border-radius:12px;" />
-                                            </td>
-                                            <td style="vertical-align:middle;">
-                                                <h2 style="margin:0;color:#0f172a;font-size:22px;">Inside Invoice</h2>
-                                                <p style="margin:2px 0 0;color:#64748b;font-size:13px;">Password Reset Verification</p>
+                                            <td align="center">
+                                                <img src="%s" alt="Inside Invoice" width="56" height="56" style="display:block;border-radius:14px;" />
                                             </td>
                                         </tr>
                                     </table>
-                                    <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">
-                                    <p style="margin:0 0 20px;color:#334155;font-size:15px;line-height:1.6;">
-                                        Use the verification code below to reset your password:
-                                    </p>
-                                    <table role="presentation" cellpadding="0" cellspacing="0" style="background-color:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:0 0 24px;">
-                                        <tr><td align="center">
-                                            <p style="margin:0;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">Verification Code</p>
-                                            <p style="margin:8px 0 0;font-size:32px;font-weight:bold;color:#0f172a;font-family:monospace;letter-spacing:6px;">%s</p>
+                                    <h1 style="margin:0 0 24px;color:#0f172a;font-size:22px;font-weight:bold;text-align:center;">Here is your verification code:</h1>
+                                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 28px;border:2px solid #e2e8f0;border-radius:12px;background-color:#f8fafc;">
+                                        <tr><td style="padding:20px 48px;">
+                                            <p style="margin:0;font-size:40px;font-weight:bold;color:#0f172a;font-family:monospace;letter-spacing:10px;text-align:center;">%s</p>
                                         </td></tr>
                                     </table>
-                                    <p style="margin:0 0 24px;color:#64748b;font-size:13px;line-height:1.6;">
-                                        This code expires in 10 minutes. If you did not request this reset, you can safely ignore this email.
-                                    </p>
-                                    <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0 16px;">
-                                    <p style="margin:0 0 4px;color:#94a3b8;font-size:12px;">This is an automated notification from Inside Invoice.</p>
-                                    <p style="margin:0;color:#94a3b8;font-size:12px;">&copy; 2026 Inside Invoice. All rights reserved.</p>
+                                    <p style="margin:0 0 8px;color:#334155;font-size:14px;text-align:center;">Please make sure you never share this code with anyone.</p>
+                                    <p style="margin:0 0 32px;color:#64748b;font-size:13px;text-align:center;">Note: The code will expire in 10 minutes.</p>
+                                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;border-top:1px solid #e2e8f0;padding-top:24px;">
+                                        <tr><td style="text-align:center;">
+                                            <p style="margin:0 0 4px;color:#334155;font-size:13px;">Didn't try to log in? Someone may know your password</p>
+                                            <p style="margin:0;color:#334155;font-size:13px;">- change it in your account and contact support.</p>
+                                        </td></tr>
+                                    </table>
+                                </td></tr>
+                                <tr><td style="padding:24px 40px;background-color:#f8fafc;border-top:1px solid #e2e8f0;border-radius:0 0 12px 12px;">
+                                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                                        <tr>
+                                            <td style="padding-right:16px;vertical-align:middle;">
+                                                <img src="%s" alt="" width="24" height="24" style="display:block;border-radius:6px;" />
+                                            </td>
+                                            <td style="vertical-align:middle;">
+                                                <p style="margin:0;color:#0f172a;font-size:14px;font-weight:bold;">Inside Invoice</p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px auto 0;">
+                                        <tr>
+                                            <td style="padding:0 10px;">
+                                                <a href="https://x.com/InsideInvoice" style="color:#64748b;text-decoration:none;font-size:13px;">X / Twitter</a>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    <p style="margin:16px 0 0;color:#94a3b8;font-size:12px;text-align:center;">&copy; 2026 Inside Invoice. All rights reserved.</p>
                                 </td></tr>
                             </table>
                         </td></tr>
                     </table>
                 </body>
                 </html>
-                """.formatted(LOGO_DATA_URI, otp != null ? otp : "N/A");
+                """.formatted(LOGO_DATA_URI, otp != null ? otp : "N/A", LOGO_DATA_URI);
     }
 
     private String buildOtpText(String otp) {
-        return "Inside Invoice - Password Reset Verification\n" +
-               "=============================================\n\n" +
-               "Use the verification code below to reset your password:\n\n" +
-               "  Verification Code: " + (otp != null ? otp : "N/A") + "\n\n" +
-               "This code expires in 10 minutes.\n" +
-               "If you did not request this reset, you can safely ignore this email.\n\n" +
-               "This is an automated notification from Inside Invoice.\n" +
+        return "Inside Invoice\n" +
+               "=============\n\n" +
+               "Here is your verification code:\n\n" +
+               "  " + (otp != null ? otp : "N/A") + "\n\n" +
+               "Please make sure you never share this code with anyone.\n" +
+               "Note: The code will expire in 10 minutes.\n\n" +
+               "Didn't try to log in? Someone may know your password - change it in your account and contact support.\n\n" +
+               "Inside Invoice\n" +
+               "X / Twitter: https://x.com/InsideInvoice\n" +
                "(c) 2026 Inside Invoice. All rights reserved.\n";
     }
 
