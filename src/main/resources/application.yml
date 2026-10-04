@@ -36,10 +36,12 @@ spring:
 management:
   endpoints:
     web:
-      exposure include: health,info,metrics
-    health:
-      show-details: never
-      probes enabled: true
+      exposure:
+        include: health,info,metrics
+  health:
+    show-details: never
+    probes:
+      enabled: true
   info:
     enabled: true
     app:
@@ -62,7 +64,8 @@ app:
     remember-me-expiration-ms: 604800000
     refresh-expiration-ms: 2592000000
 logging:
-  level root: INFO
-  level com.insideinvoice: INFO
-  level org.springframework.security: INFO
-  level org.springframework.web: INFO
+  level:
+    root: INFO
+    com.insideinvoice: INFO
+    org.springframework.security: INFO
+    org.springframework.web: INFO
