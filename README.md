@@ -32,7 +32,7 @@ Or set in Railway: `SPRING_PROFILES_ACTIVE=prod`
 docker run -d --name insideinvoice-db \
   -e POSTGRES_DB=inside_invoice \
   -e POSTGRES_USER=insideinvoice \
-  -e POSTGRES_PASSWORD=invoiceinside \
+  -e POSTGRES_PASSWORD=YOUR_POSTGRES_PASSWORD \
   -p 5433:5432 \
   postgres:18-alpine
 ```
@@ -49,22 +49,22 @@ docker stop insideinvoice-db
 
 **Step 1: Dump from Neon prod (run in terminal):**
 ```bash
-/opt/homebrew/opt/postgresql@18/bin/pg_dump "postgresql://neondb_owner:npg_59kryoHMLmSD@ep-proud-sky-b48o74qh.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require" --no-privileges --no-owner -f /tmp/prod.sql
+/opt/homebrew/opt/postgresql@18/bin/pg_dump "postgresql://neondb_owner:YOUR_NEON_PASSWORD@ep-proud-sky-b48o74qh.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require" --no-privileges --no-owner -f /tmp/prod.sql
 ```
 
 **Step 2: Drop existing tables (if any):**
 ```bash
-PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE'; END LOOP; END \$\$;"
+PGPASSWORD=YOUR_PASSWORD psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE'; END LOOP; END \$\$;"
 ```
 
 **Step 3: Restore to local Docker:**
 ```bash
-PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -f /tmp/prod.sql
+PGPASSWORD=YOUR_PASSWORD psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -f /tmp/prod.sql
 ```
 
 **Step 4: Verify:**
 ```bash
-PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "
+PGPASSWORD=YOUR_PASSWORD psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "
 SELECT 'users' as t, COUNT(*) FROM users
 UNION ALL SELECT 'customers', COUNT(*) FROM customers
 UNION ALL SELECT 'invoices', COUNT(*) FROM invoices;
@@ -75,19 +75,19 @@ UNION ALL SELECT 'invoices', COUNT(*) FROM invoices;
 
 ```bash
 # Version
-PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "SELECT version();"
+PGPASSWORD=YOUR_PASSWORD psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "SELECT version();"
 
 # Users
-PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "SELECT id, name, email FROM users;"
+PGPASSWORD=YOUR_PASSWORD psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "SELECT id, name, email FROM users;"
 
 # Customers
-PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "SELECT id, name, email FROM customers;"
+PGPASSWORD=YOUR_PASSWORD psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "SELECT id, name, email FROM customers;"
 
 # Invoices
-PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "SELECT id, invoice_number, grand_total FROM invoices;"
+PGPASSWORD=YOUR_PASSWORD psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "SELECT id, invoice_number, grand_total FROM invoices;"
 
 # All table counts
-PGPASSWORD=invoiceinside psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "
+PGPASSWORD=YOUR_PASSWORD psql -h localhost -p 5433 -U insideinvoice -d inside_invoice -c "
 SELECT 'users' as t, COUNT(*) FROM users
 UNION ALL SELECT 'businesses', COUNT(*) FROM businesses
 UNION ALL SELECT 'customers', COUNT(*) FROM customers
@@ -143,7 +143,7 @@ SPRING_PROFILES_ACTIVE=prod
 # Decrypt
 python3 -c "
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-key = bytes.fromhex('475cdadfe93e31872f0deddfa46d5b2cd7a04c2600e6c3d6663230f23be0f6b6')
+key = bytes.fromhex('YOUR_ENCRYPTION_KEY_HEX')
 data = open('backup.sql.enc','rb').read()
 plain = AESGCM(key).decrypt(data[4:16], data[16:], None)
 open('backup.sql','wb').write(plain)
