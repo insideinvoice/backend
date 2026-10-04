@@ -54,7 +54,7 @@ public class DataSeeder implements CommandLineRunner {
                     .password(passwordEncoder.encode(adminPassword))
                     .rawPassword(adminPassword)
                     .role(Role.ADMIN)
-                    .businessId(null)
+                    .businessId(adminBusiness.getId())
                     .businessSetupCompleted(true)
                     .build();
             userRepository.save(admin);
