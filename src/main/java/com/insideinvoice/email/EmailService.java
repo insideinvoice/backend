@@ -62,6 +62,20 @@ public class EmailService {
         }
     }
 
+    public void sendRawEmail(String toEmail, String subject, String textContent) {
+        if (resendApiKey == null || resendApiKey.isBlank()) {
+            log.warn("Resend API key not configured, skipping raw email send");
+            return;
+        }
+        try {
+            sendViaResend(toEmail, subject, "<pre style=\"white-space:pre-wrap;font-family:monospace;\">"
+                    + escapeHtml(textContent) + "</pre>", textContent, null);
+            log.info("Raw email forwarded to: {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send raw email to: {}", toEmail, e);
+        }
+    }
+
     private void sendViaResend(String toEmail, String subject, String htmlContent, String textContent, String replyTo) throws Exception {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("from", "Inside Invoice <" + mailFrom + ">");

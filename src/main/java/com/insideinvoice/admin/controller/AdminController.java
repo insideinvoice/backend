@@ -403,8 +403,9 @@ public class AdminController {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllProducts() {
         List<Product> products = productRepository.findAll();
         List<Map<String, Object>> result = products.stream().map(p -> {
-            String businessName = businessRepository.findById(p.getBusinessId())
-                    .map(Business::getBusinessName).orElse("Unknown");
+            Business business = businessRepository.findById(p.getBusinessId()).orElse(null);
+            String businessName = business != null ? business.getBusinessName() : "Unknown";
+            String ownerName = business != null ? business.getOwnerName() : "Unknown";
             Map<String, Object> m = new HashMap<>();
             m.put("id", p.getId());
             m.put("name", p.getName());
@@ -412,6 +413,7 @@ public class AdminController {
             m.put("rate", p.getRate());
             m.put("gstPercentage", p.getGstPercentage());
             m.put("businessName", businessName);
+            m.put("ownerName", ownerName);
             m.put("createdAt", p.getCreatedAt() != null ? p.getCreatedAt().toString() : null);
             return m;
         }).toList();

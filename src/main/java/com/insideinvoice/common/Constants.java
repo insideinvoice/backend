@@ -15,6 +15,7 @@ public final class Constants {
 
     public static final String API_AUTH = "/api/auth/**";
     public static final String API_CONTACT = "/api/contact/**";
+    public static final String API_EMAIL_INBOUND = "/api/email/inbound";
     public static final String API_SWAGGER = "/swagger-ui/**";
     public static final String API_API_DOCS = "/v3/api-docs/**";
     public static final String API_ACTUATOR = "/actuator/**";

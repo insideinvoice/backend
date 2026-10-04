@@ -19,4 +19,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     void deleteByBusinessId(Long businessId);
 
     List<Product> findByBusinessIdAndHsn(Long businessId, String hsn);
+
+    List<Product> findByBusinessId(Long businessId);
 }

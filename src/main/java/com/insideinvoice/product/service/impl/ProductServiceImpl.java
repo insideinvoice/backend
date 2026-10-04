@@ -83,11 +83,25 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public ProductResponse findByHsn(String hsn, Long businessId) {
-        List<Product> products = productRepository.findByBusinessIdAndHsn(businessId, hsn);
+        String trimmed = hsn == null ? "" : hsn.trim();
+        List<Product> products = productRepository.findByBusinessIdAndHsn(businessId, trimmed);
+        if (products.isEmpty()) {
+            // Fallback: match ignoring spaces, dashes and case ("9403 2090" == "9403-2090" == "94032090")
+            String normalized = normalizeHsn(trimmed);
+            if (!normalized.isEmpty()) {
+                products = productRepository.findByBusinessId(businessId).stream()
+                        .filter(p -> p.getHsn() != null && normalizeHsn(p.getHsn()).equals(normalized))
+                        .toList();
+            }
+        }
         if (products.isEmpty()) {
             throw new ResourceNotFoundException("Product", "hsn", hsn);
         }
         return productMapper.toResponse(products.get(0));
+    }
+
+    private static String normalizeHsn(String hsn) {
+        return hsn.replaceAll("[^0-9A-Za-z]", "").toUpperCase();
     }
 
     @Override

@@ -40,6 +40,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(Constants.API_AUTH).permitAll()
                         .requestMatchers(Constants.API_CONTACT).permitAll()
+                        .requestMatchers(Constants.API_EMAIL_INBOUND).permitAll()
                         .requestMatchers(Constants.API_SWAGGER).permitAll()
                         .requestMatchers(Constants.API_API_DOCS).permitAll()
                         .requestMatchers(Constants.API_ACTUATOR).permitAll()
