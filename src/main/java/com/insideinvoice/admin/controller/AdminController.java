@@ -157,9 +157,9 @@ public class AdminController {
             return m;
         }).toList();
 
-        // Monthly revenue (sum of grand_total where status != 'DRAFT' and status != 'CANCELLED')
+        // Monthly revenue = count of sales (invoices) per month
         Query revQuery = entityManager.createNativeQuery(
-            "SELECT TO_CHAR(date_trunc('month', created_at), 'YYYY-MM') AS month, COALESCE(SUM(grand_total), 0) AS revenue " +
+            "SELECT TO_CHAR(date_trunc('month', created_at), 'YYYY-MM') AS month, COUNT(*) AS revenue " +
             "FROM invoices WHERE status NOT IN ('DRAFT', 'CANCELLED') GROUP BY date_trunc('month', created_at) ORDER BY month");
         List<Map<String, Object>> revenueByMonth = ((List<Object[]>) revQuery.getResultList()).stream().map(r -> {
             Map<String, Object> m = new HashMap<>();
