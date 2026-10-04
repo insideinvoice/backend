@@ -103,6 +103,21 @@ wc -l /tmp/prod.sql
 head -20 /tmp/prod.sql
 ```
 
+### Resend API Key
+
+**Required for email functionality.**
+
+| Variable | Description |
+|----------|-------------|
+| `APP_MAIL_RESEND_API_KEY` | Your Resend API key (get it from [resend.com](https://resend.com)) |
+
+Set this environment variable when running the app, or add it to your hosting platform (Railway, Render, etc.):
+
+```bash
+export APP_MAIL_RESEND_API_KEY=re_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
+
+> Note: The backend `EmailService` reads this via `@Value("${app.mail.resend-api-key:}")`, which maps to the `APP_MAIL_RESEND_API_KEY` environment variable.
 ### Production Environment Variables (Railway)
 ```
 DATABASE_URL=jdbc:postgresql://ep-xxx.neon.tech/inside_invoice?sslmode=require
