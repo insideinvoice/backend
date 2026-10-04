@@ -42,7 +42,6 @@ management:
       probes enabled: true
   info:
     enabled: true
-  info:
     app:
       name: Inside Invoice
       description: SaaS Multi-Tenant Invoicing Platform
