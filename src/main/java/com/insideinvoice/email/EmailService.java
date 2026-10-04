@@ -233,7 +233,7 @@ public class EmailService {
 
     private String escapeHtml(String input) {
         if (input == null) return "";
-        return input.replace("&", "&").replace("<", "<").replace(">", ">")
-                .replace("\"", """).replace("'", "'");
+        return input.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                .replace("\"", "&quot;").replace("'", "&#39;");
     }
 }
