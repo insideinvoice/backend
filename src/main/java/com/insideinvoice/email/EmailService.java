@@ -93,7 +93,9 @@ public class EmailService {
         ));
 
         HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(resendApiKey);
+        // Base64 decode the Resend API key (stored as base64 in application.properties)
+String actualResendApiKey = new String(java.util.Base64.getDecoder().decode(resendApiKey));
+headers.setBearerAuth(actualResendApiKey);
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         ResponseEntity<String> response = restTemplate.exchange(
