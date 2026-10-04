@@ -21,7 +21,7 @@ spring:
     schemas: public
 
 app:
-  base-url: ${APP_BASE_URL:https://insideinvoice.app}
+  base-url: https://backend-production-1509.up.railway.app
 
 backup:
   enabled: true

@@ -21,10 +21,10 @@ app:
     remember-me-expiration-ms: 604800000
     refresh-expiration-ms: 2592000000
   mail:
-    resend-api-key: ${RESEND_API_KEY:}
-    from: ${MAIL_FROM:noreply@insideinvoice.com}
-    logo-url: ${INSIDE_INVOICE_LOGO_URL:https://your-public-logo-url}
-    contact-email: ${CONTACT_EMAIL:insideinvoice87@gmail.com}
+    resend-api-key: re_CxMHFKkG_4j8GGXf6yWCujzH3EisaV1KU
+    from: noreply@insideinvoice.com
+    logo-url: https://your-public-logo-url
+    contact-email: insideinvoice87@gmail.com
 
 management:
   endpoints:
