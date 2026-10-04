@@ -6,7 +6,7 @@ spring:
   application:
     name: inside-invoice
   profiles:
-    active: local
+    active: prod
 
   jackson:
     serialization:
