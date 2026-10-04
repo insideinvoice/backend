@@ -1,47 +1,69 @@
-server:
-  port: 8080
-  address: 0.0.0.0
-
 spring:
   application:
     name: inside-invoice
   profiles:
     active: prod
-
   jackson:
     serialization:
       write-dates-as-timestamps: false
     date-format: yyyy-MM-dd
     time-zone: UTC
-
-app:
-  jwt:
-    secret: 4a6f686e446f6553656372657456657279566572795365637265744b6579466f724a57545369676e696e67416e64456e6372797074696f6e
-    expiration-ms: 10800000
-    remember-me-expiration-ms: 604800000
-    refresh-expiration-ms: 2592000000
+  datasource:
+    url: jdbc:postgresql://neondb_owner:npg_lzQnCNUwu27r@ep-proud-sky-b48o74qh-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+    username: neondb_owner
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    schemas: public
   mail:
-    resend-api-key: re_CxMHFKkG_4j8GGXf6yWCujzH3EisaV1KU
+    resend-api-key: cmVfS3ZxSjNTeFBfRGRNdkREM3NRendtUXZYa21TYzNlMmFm
     from: noreply@insideinvoice.com
     logo-url: https://your-public-logo-url
     contact-email: insideinvoice87@gmail.com
-
 management:
   endpoints:
     web:
-      exposure:
-        include: health,info,metrics
-  endpoint:
+      exposure include: health,info,metrics
     health:
       show-details: never
-      probes:
-        enabled: true
+      probes enabled: true
   info:
-    env:
-      enabled: true
-
-info:
-  app:
-    name: Inside Invoice
-    description: SaaS Multi-Tenant Invoicing Platform
-    version: 1.0.0
+    enabled: true
+  info:
+    app:
+      name: Inside Invoice
+      description: SaaS Multi-Tenant Invoicing Platform
+      version: 1.0.0
+backup:
+  enabled: true
+  retention-days: 90
+  timeout-minutes: 30
+  google-drive:
+    root-folder-id: 11Gr5nyaK7VZBJxSwxOmQrkRZPt0sSYyt
+    client-id: 1084673576585-ah2ms2300big3uk4smjmgikav29lbjs9.apps.googleusercontent.com
+    client-secret: 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
+    refresh-token: 1//0g8UpdnP4HBVYCgYIARAAGBASNwF-L9IrJ2PwNDNrROswu-1AdxpcUr5PVyhxp0p8-FoL9RPExx8G61Mw8B7g5xmgTAQOexJRyjE
+app:
+  jwt:
+    secret: NGE2ZjY4NmU0NDZmNjU1MzY1NjM3MjY1NzQ1NjY1NzI3OTU2NjU3Mjc5NTM2NTYzNzI2NTc0NGI2NTc5NDY2ZjcyNGE1NzU0NTM2OTY3NmU2OTZlNjc0MTZlNjQ0NTZlNjM3Mjc5NzA3NDY5NmY2ZQ==
+    expiration-ms: 10800000
+    remember-me-expiration-ms: 604800000
+    refresh-expiration-ms: 2592000000
+logging:
+  level root: INFO
+  level com.insideinvoice: INFO
+  level org.springframework.security: INFO
+  level org.springframework.web: INFO
