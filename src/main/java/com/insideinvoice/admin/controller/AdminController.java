@@ -398,6 +398,42 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success("User and their data deleted successfully"));
     }
 
+    @PutMapping("/users/{id}")
+    @Operation(summary = "Update user details (Admin only)")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateUser(@PathVariable Long id, @RequestBody Map<String, Object> updates) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (updates.containsKey("name")) {
+            user.setName((String) updates.get("name"));
+        }
+        if (updates.containsKey("email")) {
+            String newEmail = (String) updates.get("email");
+            if (!newEmail.equals(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
+                throw new BadRequestException("Email already in use");
+            }
+            user.setEmail(newEmail);
+        }
+        if (updates.containsKey("username")) {
+            String newUsername = (String) updates.get("username");
+            if (!newUsername.equals(user.getUsername()) && userRepository.existsByUsername(newUsername)) {
+                throw new BadRequestException("Username already in use");
+            }
+            user.setUsername(newUsername);
+        }
+
+        userRepository.save(user);
+        log.info("Admin updated user: {}", user.getEmail());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("id", user.getId());
+        result.put("name", user.getName());
+        result.put("email", user.getEmail());
+        result.put("username", user.getUsername());
+        result.put("role", user.getRole().name());
+        return ResponseEntity.ok(ApiResponse.success("User updated successfully", result));
+    }
+
     @GetMapping("/products")
     @Operation(summary = "Get all registered products across all businesses (Admin only)")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllProducts() {
