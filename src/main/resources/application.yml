@@ -9,7 +9,7 @@ spring:
     date-format: yyyy-MM-dd
     time-zone: UTC
   datasource:
-    url: jdbc:postgresql://neondb_owner:npg_lzQnCNUwu27r@ep-proud-sky-b48o74qh-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+    url: jdbc:postgresql://neondb_owner:lzQnCNUwu27r@ep-proud-sky-b48o74qh-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
     username: neondb_owner
     driver-class-name: org.postgresql.Driver
     hikari:
