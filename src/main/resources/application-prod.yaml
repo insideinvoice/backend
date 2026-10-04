@@ -12,7 +12,7 @@ spring:
       max-lifetime: 1200000
 
   jpa:
-    show-sql: false
+    show-sql: true
 
   flyway:
     enabled: true
