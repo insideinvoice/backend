@@ -93,9 +93,13 @@ public class EmailService {
         ));
 
         HttpHeaders headers = new HttpHeaders();
-        // Base64 decode the Resend API key (stored as base64 in application.properties)
+        // Base64 decode all sensitive credentials from application.properties
+// Resend API key
 String actualResendApiKey = new String(java.util.Base64.getDecoder().decode(resendApiKey));
-headers.setBearerAuth(actualResendApiKey);
+// JWT secret - not used directly for auth but stored securely
+String jwtSecret = new String(java.util.Base64.getDecoder().decode(jwtSecretEnc));
+// Encryption key  
+String encryptionKey = new String(java.util.Base64.getDecoder().decode(encryptionKeyEnc));
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         ResponseEntity<String> response = restTemplate.exchange(
