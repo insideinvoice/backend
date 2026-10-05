@@ -17,10 +17,10 @@ public class EmailInboundController {
 
     private final EmailService emailService;
 
-    @Value("${app.mail.from}")
+    @Value("${app.mail.from:noreply@insideinvoice.com}")
     private String mailFrom;
 
-    @Value("${app.mail.contact-email}")
+    @Value("${app.mail.contact-email:insideinvoice87@gmail.com}")
     private String contactEmail;
 
     @PostMapping("/inbound")
