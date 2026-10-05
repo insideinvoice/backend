@@ -40,33 +40,50 @@ public class MarkLabelRenderer implements HazmatRenderer {
         return thermal ? 0x000000 : 0xE4002B;
     }
 
-    private void hatchBorder(PdfCanvas c, double w, double h, boolean thermal) throws IOException {
+    private static int r(int rgb) {
+        return (rgb >> 16) & 0xFF;
+    }
+
+    private static int g(int rgb) {
+        return (rgb >> 8) & 0xFF;
+    }
+
+    private static int b(int rgb) {
+        return rgb & 0xFF;
+    }
+
+    /** Red (or black, thermal) hatched border band. Returns the band width in mm. */
+    private double hatchBorder(PdfCanvas c, double w, double h, boolean thermal) throws IOException {
         double band = Math.max(6, Math.min(w, h) * 0.08);
         int color = ink(thermal);
         c.saveState();
         // four hatched bands around the white centre
-        hatchBand(c, 0, 0, w, band, color, thermal);
-        hatchBand(c, 0, h - band, w, band, color, thermal);
-        hatchBand(c, 0, band, band, h - 2 * band, color, thermal);
-        hatchBand(c, w - band, band, band, h - 2 * band, color, thermal);
+        hatchBand(c, 0, 0, w, band, color);
+        hatchBand(c, 0, h - band, w, band, color);
+        hatchBand(c, 0, band, band, h - 2 * band, color);
+        hatchBand(c, w - band, band, band, h - 2 * band, color);
         c.restoreState();
-        c.strokeRgb(0, 0, 0);
-        c.strokeRect(0.5, 0.5, w - 1, h - 1, 0.75);
-        c.strokeRect(band, band, w - 2 * band, h - 2 * band, 0.75);
+        // keylines in the mark ink (red in colour mode, black on thermal)
+        c.strokeRgb(r(color), g(color), b(color));
+        c.strokeRect(0.4, 0.4, w - 0.8, h - 0.8, 0.5);
+        c.strokeRect(band, band, w - 2 * band, h - 2 * band, 0.5);
         c.strokeBlack();
+        // PDFBox page start leaves the fill colour on WHITE — reset it so text draws
+        c.fillBlack();
+        return band;
     }
 
-    private void hatchBand(PdfCanvas c, double x, double y, double w, double h, int color,
-                           boolean thermal) throws IOException {
-        double gap = Math.max(1.6, LabelUnits.dotMm(203) * 8);
+    private void hatchBand(PdfCanvas c, double x, double y, double w, double h, int color)
+            throws IOException {
+        double gap = Math.max(1.5, LabelUnits.dotMm(203) * 8);
         c.saveState();
         c.clipPolygon(new double[][]{{x, y}, {x + w, y}, {x + w, y + h}, {x, y + h}});
-        c.strokeRgb((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
+        c.strokeRgb(r(color), g(color), b(color));
         double d = w + h;
         for (double o = -d; o <= d; o += gap) {
             double ax = x - 1;
             double ay = ax + o;
-            c.line(ax, ay, x + w + 1, ay + w + 1, 0.6);
+            c.line(ax, ay, x + w + 1, ay + w + 1, 0.55);
         }
         c.strokeBlack();
         c.restoreState();
@@ -74,88 +91,139 @@ public class MarkLabelRenderer implements HazmatRenderer {
 
     // ------------------------------------------------------------- lithium
 
-    private void drawBatteryCluster(PdfCanvas c, double cx, double top, double maxH,
-                                    boolean thermal) throws IOException {
-        int g = thermal ? 0 : 51;
-        c.fillRgb(g, g, g);
-        c.strokeRgb(g, g, g);
-        double u = maxH / 34.0;
-        double totalW = 60 * u;
-        double x0 = cx - totalW / 2;
-        double base = top + 34 * u;
-        cylBattery(c, x0, base - 24 * u, 7 * u, 24 * u);
-        cylBattery(c, x0 + 9 * u, base - 30 * u, 7 * u, 30 * u);
-        cylBattery(c, x0 + 18 * u, base - 18 * u, 7 * u, 18 * u);
-        // square battery in the middle
-        double sqX = x0 + 27 * u, sqY = base - 22 * u;
-        c.fillRect(sqX, sqY, 13 * u, 22 * u);
-        c.fillRect(sqX + 4.5 * u, sqY - 2.5 * u, 4 * u, 2.5 * u);
-        // horizontal cylinder battery at right
-        double hx = x0 + 44 * u, hy = base - 14 * u;
-        c.fillRect(hx, hy, 16 * u, 10 * u);
-        c.fillEllipse(hx + 16 * u, hy + 5 * u, 0.001, 5 * u); // terminals below
-        // white white terminal disc
-        c.fillGray(1f);
-        c.fillEllipse(hx + 16 * u, hy + 5 * u, 3 * u, 4 * u);
-        // re-fill cluster colour for flame + knob
-        c.fillRgb(g, g, g);
-        c.fillRect(hx + 16 * u, hy + 2 * u, 2.5 * u, 6 * u);
-        double fx = hx + 11 * u, fy = hy + 2 * u;
-        c.fillPolygon(new double[][]{
-                {fx, fy}, {fx - 8 * u, fy - 9 * u}, {fx - 4 * u, fy - 8 * u},
-                {fx - 6 * u, fy - 17 * u}, {fx - 1 * u, fy - 10 * u},
-                {fx + 1 * u, fy - 7 * u}, {fx + 5 * u, fy - 13 * u},
-                {fx + 8 * u, fy - 7 * u}, {fx + 4 * u, fy - 4 * u},
-                {fx + 6 * u, fy}
-        });
+    /**
+     * Battery cluster in the official UN3480 mark style, laid out on a 64 x 38
+     * design grid (origin top-left, baseline at y = 38):
+     *
+     * <ul>
+     *   <li>two thin cylindrical cells front-left</li>
+     *   <li>one wide cell behind them with a white terminal button</li>
+     *   <li>a 9 V block with two terminal posts</li>
+     *   <li>a horizontal cell on the right with a white end terminal</li>
+     *   <li>a flame rising off the horizontal cell, struck through by a
+     *       lightning bolt (dark over paper, knocked out white over the cell)</li>
+     * </ul>
+     */
+    private void drawBatteryCluster(PdfCanvas c, double x0, double top, double u, boolean thermal)
+            throws IOException {
+        int body = thermal ? 0x000000 : 0x333333;
+        double base = top + 38 * u;
+
+        // --- wide cell behind (x 15..30, top 1, baseline 38)
+        c.fillRgb(r(body), g(body), b(body));
+        c.strokeRgb(r(body), g(body), b(body));
+        cylinder(c, x0 + 15 * u, top + 1 * u, 15 * u, 37 * u, body, thermal);
+        // white terminal button on the wide cell's top face
+        if (!thermal) {
+            c.fillWhite();
+            c.fillEllipse(x0 + 22.5 * u, top + 2.4 * u, 3.4 * u, 1.5 * u);
+        }
+
+        // --- thin cells in front-left (drawn after so they read as "in front")
+        cylinder(c, x0 + 1 * u, top + 16 * u, 6 * u, 22 * u, body, thermal);
+        cylinder(c, x0 + 8.5 * u, top + 10 * u, 6 * u, 28 * u, body, thermal);
+
+        // --- 9 V block with two terminal posts (x 32..44, top 13)
+        c.fillRgb(r(body), g(body), b(body));
+        c.fillRect(x0 + 34 * u, top + 9 * u, 3.6 * u, 4.5 * u);
+        c.fillRect(x0 + 39.4 * u, top + 9 * u, 3.6 * u, 4.5 * u);
+        c.fillRect(x0 + 32 * u, top + 13 * u, 12 * u, 25 * u);
+
+        // --- horizontal cell on the right (x 44..64, top 24..baseline)
+        c.fillRect(x0 + 47 * u, top + 24 * u, 14 * u, 14 * u);
+        c.fillEllipse(x0 + 47 * u, base - 7 * u, 3 * u, 7 * u);
+        c.fillEllipse(x0 + 61 * u, base - 7 * u, 3 * u, 7 * u);
+        // white positive terminal on the right end cap
+        c.fillWhite();
+        c.fillEllipse(x0 + 61 * u, base - 7 * u, 1.6 * u, 3 * u);
+
+        // --- flame rising off the horizontal cell (same silhouette as the
+        //     class-diamond flame pictogram)
+        c.fillBlack();
+        double flameS = 0.167 * u;
+        c.svgPath(HazmatSymbols.FLAME_D, x0 + 41.16 * u, top + 7.67 * u, flameS, true, null);
+
+        // --- lightning bolt: dark over paper, knocked out white where it
+        //     crosses the horizontal cell
+        double[][] bolt = {
+                {x0 + 54.2 * u, top + 20 * u},
+                {x0 + 49.4 * u, top + 30.8 * u},
+                {x0 + 52.4 * u, top + 30.8 * u},
+                {x0 + 51.2 * u, top + 38 * u},
+                {x0 + 56.6 * u, top + 27.2 * u},
+                {x0 + 53.6 * u, top + 27.2 * u},
+                {x0 + 55.4 * u, top + 20 * u}};
+        c.fillBlack();
+        c.fillPolygon(bolt);
+        c.saveState();
+        c.clipPolygon(new double[][]{
+                {x0 + 47 * u, top + 24 * u}, {x0 + 61 * u, top + 24 * u},
+                {x0 + 61 * u, base}, {x0 + 47 * u, base}});
+        c.fillWhite();
+        c.fillPolygon(bolt);
+        c.restoreState();
+
         c.fillBlack();
         c.strokeBlack();
     }
 
-    private void cylBattery(PdfCanvas c, double x, double yTop, double w, double h) throws IOException {
-        c.fillRect(x, yTop, w, h);
-        c.fillEllipse(x + w / 2, yTop, w / 2, w * 0.28);
-        c.fillRect(x + w / 3, yTop - 1.8, w / 3, 1.9);
+    /** Vertical cylinder: body, domed top face and a small terminal nub. */
+    private void cylinder(PdfCanvas c, double x, double top, double w, double h, int body,
+                          boolean thermal) throws IOException {
+        c.fillRgb(r(body), g(body), b(body));
+        c.fillRect(x, top, w, h);
+        c.fillEllipse(x + w / 2, top, w / 2, w * 0.18);
+        c.fillRect(x + w * 0.32, top - w * 0.2, w * 0.36, w * 0.22);
+        if (thermal) {
+            c.fillBlack();
+        }
     }
 
     private void lithium(PdfCanvas c, HazmatSpec spec, LabelSizes.Size size) throws IOException {
         double w = size.wMm();
         double h = size.hMm();
         boolean thermal = spec.isThermal();
-        hatchBorder(c, w, h, thermal);
-
+        double band = hatchBorder(c, w, h, thermal);
         double cx = w / 2;
-        drawBatteryCluster(c, cx, h * 0.11, Math.min(w, h) * 0.38, thermal);
+        double inner = w - 2 * band;
+
+        // battery cluster: 64 x 38 design units, centred in the white area
+        double u = inner * 0.80 / 64.0;
+        double clusterW = 64 * u;
+        double clusterH = 38 * u;
+        drawBatteryCluster(c, cx - clusterW / 2, band + Math.max(1.5, (h * 0.42 - clusterH) * 0.55),
+                u, thermal);
 
         // UN number (large bold)
         String un = spec.getUnNumber() == null || spec.getUnNumber().isBlank()
                 ? "UN3480"
                 : spec.getUnNumber().toUpperCase(Locale.ENGLISH);
-        double unSize = c.fitFontSize(un, w - 16, 20, 12, true);
+        double unSize = c.fitFontSize(un, inner - 8, 34, 12, true);
         c.text(un, cx, h * 0.55, unSize, true, PdfCanvas.Align.CENTER);
 
-        // info phone line
+        // "For more information, call: …"
         String phone = nv(spec.getEmergencyPhone());
         String info = phone.isEmpty() ? "For more information, call: the shipper"
                 : "For more information, call: " + phone;
-        double iSize = c.fitFontSize(info, w - 20, 8, 5.5, false);
-        c.text(info, w * 0.16, h * 0.72, iSize, false, PdfCanvas.Align.LEFT);
+        double iSize = c.fitFontSize(info, inner - 6, 11, 6, false);
+        c.text(info, cx, h * 0.73, iSize, false, PdfCanvas.Align.CENTER);
 
         // "Global Response Access Code" line (only when provided)
         String gra = nv(spec.getGraCode());
         if (!gra.isEmpty()) {
             String graLine = "Global Response Access Code : " + gra;
-            double gSize = c.fitFontSize(graLine, w - 20, 8, 5.5, false);
-            c.text(graLine, w * 0.20, h * 0.80, gSize, false, PdfCanvas.Align.LEFT);
+            double gSize = c.fitFontSize(graLine, inner - 6, 11, 6, false);
+            c.text(graLine, cx, h * 0.81, gSize, false, PdfCanvas.Align.CENTER);
         }
 
         String pi = spec.getLithiumPackingInstruction() == null
                 ? "" : "IATA PI " + spec.getLithiumPackingInstruction().trim();
         if (!pi.isBlank()) {
-            double pSize = c.fitFontSize(pi, w - 24, 8, 6, false);
-            c.text(pi, cx, h * 0.87, pSize, false, PdfCanvas.Align.CENTER);
+            double pSize = c.fitFontSize(pi, inner - 10, 9, 6, false);
+            c.text(pi, cx, h * 0.88, pSize, false, PdfCanvas.Align.CENTER);
         }
-        ClassDiamondRenderer.drawFooter(c, spec, h - 5.5, w);
+        // footer stays inside the white centre, clear of the hatch band
+        ClassDiamondRenderer.drawFooter(c, spec, h - band - 5, w, band + 1.5);
     }
 
     // ------------------------------------------------- limited quantity
@@ -210,18 +278,18 @@ public class MarkLabelRenderer implements HazmatRenderer {
         double w = size.wMm();
         double h = size.hMm();
         boolean thermal = spec.isThermal();
-        hatchBorder(c, w, h, thermal);
+        double band = hatchBorder(c, w, h, thermal);
 
         double cx = w / 2;
         // centre mark: * (most), E (ethylene oxide style) or the class division
         String mark = spec.getHazardClass() == null || spec.getHazardClass().isBlank()
                 ? "*" : spec.getHazardClass().trim().toUpperCase(Locale.ENGLISH);
         double sizePt = LabelUnits.mmToPt(Math.min(w, h) * 0.22) / 0.72;
-        double fit = c.fitFontSize(mark, w * 0.4, sizePt, 18, true);
+        double fit = c.fitFontSize(mark, w - 2 * band - 10, sizePt, 18, true);
         c.text(mark, cx, h * 0.30, fit, true, PdfCanvas.Align.CENTER);
 
         String eq = "EXCEPTED QUANTITY";
-        double eSize = c.fitFontSize(eq, w - 30, 9, 6, true);
+        double eSize = c.fitFontSize(eq, w - 2 * band - 8, 12, 6, true);
         c.text(eq, cx, h * 0.55, eSize, true, PdfCanvas.Align.CENTER);
 
         LabelAddress consignor = spec.getConsignor();
@@ -229,13 +297,13 @@ public class MarkLabelRenderer implements HazmatRenderer {
             String name = consignor.getCompany() != null && !consignor.getCompany().isBlank()
                     ? consignor.getCompany() : consignor.getName();
             if (name != null && !name.isBlank()) {
-                double nSize = c.fitFontSize(name.toUpperCase(Locale.ENGLISH), w - 30, 8, 6,
+                double nSize = c.fitFontSize(name.toUpperCase(Locale.ENGLISH), w - 2 * band - 8, 9, 6,
                         false);
                 c.text(name.toUpperCase(Locale.ENGLISH), cx, h * 0.66, nSize, false,
                         PdfCanvas.Align.CENTER);
             }
         }
-        ClassDiamondRenderer.drawFooter(c, spec, h - 5.5, w);
+        ClassDiamondRenderer.drawFooter(c, spec, h - band - 5, w, band + 1.5);
     }
 
     // ------------------------------------------------------ env hazardous

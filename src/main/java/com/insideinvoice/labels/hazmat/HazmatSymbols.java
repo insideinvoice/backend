@@ -14,6 +14,14 @@ public final class HazmatSymbols {
 
     private static final double U = 100.0; // viewBox units
 
+    /** Three-tongue flame silhouette (49 CFR / IATA flame pictogram), viewBox 0..100. */
+    public static final String FLAME_D = "M50 2 C54 14 62 20 65 30 "
+            + "C69 42 67 54 61 64 C63 56 63 48 61 41 "
+            + "C71 52 78 66 77 79 C76 91 65 98 50 98 "
+            + "C35 98 24 91 23 79 C22 66 29 52 39 41 "
+            + "C37 48 37 56 39 64 C33 54 31 42 35 30 "
+            + "C38 20 46 14 50 2 Z";
+
     private HazmatSymbols() {
     }
 
@@ -43,12 +51,12 @@ public final class HazmatSymbols {
     private static void flame(PdfCanvas c, double x, double y, double h,
                               int[] ink, int[] bg) throws IOException {
         c.fillRgb(ink[0], ink[1], ink[2]);
-        path(c, "M50 4 C64 26 84 40 84 62 C84 84 69 96 50 96 C31 96 16 84 16 62 "
-                + "C16 40 36 26 50 4 Z", x, y, h / U);
+        // three-tongue flame silhouette (49 CFR / IATA flame pictogram)
+        path(c, FLAME_D, x, y, h / U);
         if (bg != null) {
             c.fillRgb(bg[0], bg[1], bg[2]);
-            path(c, "M50 44 C57 53 65 59 65 70 C65 81 58 88 50 88 C42 88 35 81 35 70 "
-                    + "C35 59 43 53 50 44 Z", x, y, h / U);
+            path(c, "M50 44 C56 53 61 59 61 69 C61 80 56 87 50 87 C44 87 39 80 39 69 "
+                    + "C39 59 44 53 50 44 Z", x, y, h / U);
         }
         c.fillBlack();
     }
@@ -192,20 +200,34 @@ public final class HazmatSymbols {
     private static void corrosive(PdfCanvas c, double x, double y, double h,
                                   int[] ink, int[] bg) throws IOException {
         double s = h / U;
-        // left test tube pouring onto the hand
-        tiltedTube(c, x, y, s, 26, 44, -35, ink, bg);
-        // right test tube pouring onto the metal plate
-        tiltedTube(c, x, y, s, 74, 44, 35, ink, bg);
-        // drips
+        // metal slab (right) with an eaten notch + support feet
         c.fillRgb(ink[0], ink[1], ink[2]);
-        c.fillEllipse(x + 30 * s, y + 62 * s, 3 * s, 4 * s);
-        c.fillEllipse(x + 70 * s, y + 60 * s, 3 * s, 4 * s);
-        // hand (left)
-        path(c, "M6 96 C6 86 12 80 24 82 L44 86 C51 87 54 92 52 96 Z", x, y, s);
-        // metal plate (right)
-        c.fillRect(x + 56 * s, y + 86 * s, 38 * s, 7 * s);
-        c.fillRect(x + 62 * s, y + 93 * s, 4 * s, 5 * s);
-        c.fillRect(x + 84 * s, y + 93 * s, 4 * s, 5 * s);
+        c.fillRect(x + 54 * s, y + 84 * s, 42 * s, 8 * s);
+        c.fillRect(x + 60 * s, y + 92 * s, 5 * s, 5 * s);
+        c.fillRect(x + 87 * s, y + 92 * s, 5 * s, 5 * s);
+        // acid bite out of the slab
+        c.fillRgb(bg[0], bg[1], bg[2]);
+        c.fillPolygon(new double[][]{
+                {x + 68 * s, y + 84 * s}, {x + 78 * s, y + 84 * s},
+                {x + 75 * s, y + 89 * s}, {x + 71 * s, y + 87 * s}});
+        // hand (left): palm + three fingers pointing right
+        c.fillRgb(ink[0], ink[1], ink[2]);
+        c.fillEllipse(x + 15 * s, y + 87 * s, 12 * s, 9.5 * s);
+        double[][] fingers = {{20, 74, 18}, {22, 81, 21}, {22, 88, 18}};
+        for (double[] f : fingers) {
+            c.fillRect(x + f[0] * s, y + f[1] * s, f[2] * s, 5.6 * s);
+            c.fillEllipse(x + (f[0] + f[2]) * s, y + (f[1] + 2.8) * s, 2.8 * s, 2.8 * s);
+        }
+        // left test tube pouring onto the hand, right test tube onto the metal
+        tiltedTube(c, x, y, s, 26, 44, -35, ink, bg);
+        tiltedTube(c, x, y, s, 74, 44, 35, ink, bg);
+        // falling drops under each mouth
+        c.fillRgb(ink[0], ink[1], ink[2]);
+        c.fillEllipse(x + 34 * s, y + 64 * s, 2.6 * s, 3.6 * s);
+        c.fillEllipse(x + 37 * s, y + 72 * s, 2.2 * s, 3 * s);
+        c.fillEllipse(x + 66 * s, y + 64 * s, 2.6 * s, 3.6 * s);
+        c.fillEllipse(x + 63 * s, y + 72 * s, 2.2 * s, 3 * s);
+        c.strokeBlack();
         c.fillBlack();
     }
 
