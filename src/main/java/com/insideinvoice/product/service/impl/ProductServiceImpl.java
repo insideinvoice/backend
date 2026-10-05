@@ -1,6 +1,7 @@
 package com.insideinvoice.product.service.impl;
 
 import com.insideinvoice.common.dto.PagedResponse;
+import com.insideinvoice.exception.DuplicateResourceException;
 import com.insideinvoice.exception.ResourceNotFoundException;
 import com.insideinvoice.product.dto.request.CreateProductRequest;
 import com.insideinvoice.product.dto.request.UpdateProductRequest;
@@ -32,6 +33,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductResponse createProduct(CreateProductRequest request, Long businessId) {
+        assertHsnUnique(request.getHsn(), businessId, null);
         Product product = productMapper.toEntity(request, businessId);
         product = productRepository.save(product);
 
@@ -73,6 +75,9 @@ public class ProductServiceImpl implements ProductService {
         Product product = productRepository.findByIdAndBusinessId(id, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
 
+        if (request.getHsn() != null) {
+            assertHsnUnique(request.getHsn(), businessId, id);
+        }
         productMapper.updateEntity(product, request);
         product = productRepository.save(product);
 
@@ -102,6 +107,26 @@ public class ProductServiceImpl implements ProductService {
 
     private static String normalizeHsn(String hsn) {
         return hsn.replaceAll("[^0-9A-Za-z]", "").toUpperCase();
+    }
+
+    /**
+     * HSN/SAC codes must be unique per business. Matching ignores spaces,
+     * dashes and case so "9403 2090", "9403-2090" and "94032090" collide.
+     */
+    private void assertHsnUnique(String hsn, Long businessId, Long excludeProductId) {
+        String trimmed = hsn == null ? "" : hsn.trim();
+        String normalized = normalizeHsn(trimmed);
+        if (normalized.isEmpty()) {
+            return;
+        }
+        productRepository.findByBusinessId(businessId).stream()
+                .filter(p -> excludeProductId == null || !excludeProductId.equals(p.getId()))
+                .filter(p -> p.getHsn() != null && normalizeHsn(p.getHsn()).equals(normalized))
+                .findFirst()
+                .ifPresent(existing -> {
+                    throw new DuplicateResourceException(String.format(
+                            "HSN/SAC '%s' is already used by product '%s'", trimmed, existing.getName()));
+                });
     }
 
     @Override
