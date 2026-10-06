@@ -41,9 +41,8 @@ public class BusinessSetupRequest {
 
     private String pincode;
 
-    @NotBlank(message = "Invoice prefix is required")
-    @Size(min = 1, max = 10, message = "Invoice prefix must be between 1 and 10 characters")
-    @Pattern(regexp = "^[A-Za-z0-9-]+$", message = "Invoice prefix must be alphanumeric with hyphens only")
+    @Size(max = 50, message = "Invoice convention must not exceed 50 characters")
+    @Pattern(regexp = "^[A-Za-z0-9._/-]*$", message = "Invoice convention may only contain letters, numbers and - . / _")
     private String invoicePrefix;
 
     private String bankName;
@@ -57,4 +56,9 @@ public class BusinessSetupRequest {
     private String bankAddress;
 
     private String upiId;
+
+    @Size(max = 500, message = "Specialist in must not exceed 500 characters")
+    private String specialistIn;
+
+    private Boolean specialistInEnabled;
 }

@@ -28,6 +28,8 @@ public class BusinessMapper {
                 .ifsc(request.getIfsc())
                 .bankAddress(request.getBankAddress())
                 .upiId(request.getUpiId())
+                .specialistIn(request.getSpecialistIn())
+                .specialistInEnabled(Boolean.TRUE.equals(request.getSpecialistInEnabled()))
                 .nextInvoiceSequence(1L)
                 .build();
     }
@@ -56,6 +58,8 @@ public class BusinessMapper {
                 .ifsc(business.getIfsc())
                 .bankAddress(business.getBankAddress())
                 .upiId(business.getUpiId())
+                .specialistIn(business.getSpecialistIn())
+                .specialistInEnabled(business.getSpecialistInEnabled())
                 .createdAt(business.getCreatedAt())
                 .updatedAt(business.getUpdatedAt())
                 .build();
@@ -80,5 +84,7 @@ public class BusinessMapper {
         if (request.getIfsc() != null) business.setIfsc(request.getIfsc());
         if (request.getBankAddress() != null) business.setBankAddress(request.getBankAddress());
         if (request.getUpiId() != null) business.setUpiId(request.getUpiId());
+        if (request.getSpecialistIn() != null) business.setSpecialistIn(request.getSpecialistIn());
+        if (request.getSpecialistInEnabled() != null) business.setSpecialistInEnabled(request.getSpecialistInEnabled());
     }
 }

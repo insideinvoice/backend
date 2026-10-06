@@ -55,7 +55,7 @@ public class Business extends BaseEntity {
     @Column(name = "pincode")
     private String pincode;
 
-    @Column(name = "invoice_prefix")
+    @Column(name = "invoice_prefix", length = 50)
     private String invoicePrefix;
 
     @Column(name = "next_invoice_sequence", nullable = false)
@@ -82,4 +82,11 @@ public class Business extends BaseEntity {
 
     @Column(name = "upi_id", length = 100)
     private String upiId;
+
+    @Column(name = "specialist_in", columnDefinition = "TEXT")
+    private String specialistIn;
+
+    @Column(name = "specialist_in_enabled", nullable = false)
+    @Builder.Default
+    private Boolean specialistInEnabled = false;
 }

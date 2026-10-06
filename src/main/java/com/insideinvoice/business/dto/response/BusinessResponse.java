@@ -37,6 +37,8 @@ public class BusinessResponse {
     private String ifsc;
     private String bankAddress;
     private String upiId;
+    private String specialistIn;
+    private Boolean specialistInEnabled;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

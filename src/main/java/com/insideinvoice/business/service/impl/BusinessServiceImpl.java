@@ -78,6 +78,8 @@ public class BusinessServiceImpl implements BusinessService {
         if (request.getIfsc() != null) business.setIfsc(request.getIfsc());
         if (request.getBankAddress() != null) business.setBankAddress(request.getBankAddress());
         if (request.getUpiId() != null) business.setUpiId(request.getUpiId());
+        if (request.getSpecialistIn() != null) business.setSpecialistIn(request.getSpecialistIn());
+        if (request.getSpecialistInEnabled() != null) business.setSpecialistInEnabled(request.getSpecialistInEnabled());
 
         business = businessRepository.save(business);
         log.info("Business updated: {}", businessId);
