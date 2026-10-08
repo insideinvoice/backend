@@ -2,6 +2,7 @@ package com.insideinvoice.business.service;
 
 import com.insideinvoice.business.dto.request.BusinessSetupRequest;
 import com.insideinvoice.business.dto.request.BusinessUpdateRequest;
+import com.insideinvoice.business.dto.request.UpdateInvoiceSettingsRequest;
 import com.insideinvoice.business.dto.response.BusinessResponse;
 
 public interface BusinessService {
@@ -13,4 +14,6 @@ public interface BusinessService {
     BusinessResponse updateBusiness(Long businessId, BusinessUpdateRequest request);
 
     void updateSignature(Long businessId, String base64Signature);
+
+    BusinessResponse updateInvoiceSettings(Long businessId, UpdateInvoiceSettingsRequest request);
 }

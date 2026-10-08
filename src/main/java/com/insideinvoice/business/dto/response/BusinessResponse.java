@@ -39,6 +39,8 @@ public class BusinessResponse {
     private String upiId;
     private String specialistIn;
     private Boolean specialistInEnabled;
+    private String invoiceTemplate;
+    private String printSettings;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -36,6 +36,9 @@ public class PublicInvoiceResponse {
     private BigDecimal taxAmount;
     private BigDecimal grandTotal;
 
+    private String template;
+    private String paperSize;
+
     private String paymentTerms;
     private String paymentMode;
     private String placeOfSupply;

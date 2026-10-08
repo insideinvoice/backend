@@ -4,6 +4,7 @@ import com.insideinvoice.auth.entity.User;
 import com.insideinvoice.auth.repository.UserRepository;
 import com.insideinvoice.business.dto.request.BusinessSetupRequest;
 import com.insideinvoice.business.dto.request.BusinessUpdateRequest;
+import com.insideinvoice.business.dto.request.UpdateInvoiceSettingsRequest;
 import com.insideinvoice.business.dto.response.BusinessResponse;
 import com.insideinvoice.business.entity.Business;
 import com.insideinvoice.business.mapper.BusinessMapper;
@@ -84,6 +85,20 @@ public class BusinessServiceImpl implements BusinessService {
         business = businessRepository.save(business);
         log.info("Business updated: {}", businessId);
         return businessMapper.toResponse(business);
+    }
+
+    @Override
+    @Transactional
+    public BusinessResponse updateInvoiceSettings(Long businessId, UpdateInvoiceSettingsRequest request) {
+        Business business = businessRepository.findById(businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Business", "id", businessId));
+        if (request.getInvoiceTemplate() != null) {
+            business.setInvoiceTemplate(request.getInvoiceTemplate());
+        }
+        if (request.getPrintSettings() != null) {
+            business.setPrintSettings(request.getPrintSettings());
+        }
+        return businessMapper.toResponse(businessRepository.save(business));
     }
 
     @Override

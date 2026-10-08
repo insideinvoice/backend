@@ -93,4 +93,10 @@ public class Business extends BaseEntity {
     @Column(name = "specialist_in_enabled", nullable = false)
     @Builder.Default
     private Boolean specialistInEnabled = false;
+
+    @Column(name = "invoice_template", length = 30)
+    private String invoiceTemplate;
+
+    @Column(name = "print_settings", columnDefinition = "TEXT")
+    private String printSettings;
 }

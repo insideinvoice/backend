@@ -5,6 +5,8 @@ import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.entity.InvoiceItem;
 import com.insideinvoice.invoice.share.dto.PublicInvoiceResponse;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -16,20 +18,26 @@ import java.util.List;
 @Component
 public class PublicInvoiceAssembler {
 
+    private static final ObjectMapper OM = new ObjectMapper();
+
     public PublicInvoiceResponse assemble(ResolvedPublicInvoice resolved) {
         Invoice invoice = resolved.getInvoice();
         Business business = resolved.getBusiness();
         Customer customer = resolved.getCustomer();
 
+        String invoiceTypeName = invoice.getInvoiceType() != null ? invoice.getInvoiceType().name() : null;
+
         return PublicInvoiceResponse.builder()
                 .invoiceNumber(invoice.getInvoiceNumber())
-                .invoiceType(invoice.getInvoiceType() != null ? invoice.getInvoiceType().name() : null)
+                .invoiceType(invoiceTypeName)
                 .status(invoice.getStatus() != null ? invoice.getStatus().name() : null)
                 .invoiceDate(invoice.getInvoiceDate())
                 .dueDate(invoice.getDueDate())
                 .subtotal(invoice.getSubtotal())
                 .taxAmount(invoice.getTaxAmount())
                 .grandTotal(invoice.getGrandTotal())
+                .template(resolveTemplate(business, invoiceTypeName))
+                .paperSize(resolvePaperSize(business, invoiceTypeName))
                 .paymentTerms(invoice.getPaymentTerms())
                 .paymentMode(invoice.getPaymentMode())
                 .placeOfSupply(invoice.getPlaceOfSupply())
@@ -47,6 +55,36 @@ public class PublicInvoiceAssembler {
                 .buyer(buyer(customer))
                 .items(items(invoice))
                 .build();
+    }
+
+    private String resolveTemplate(Business b, String invoiceTypeName) {
+        if (b == null) return null;
+        String perTypeTemplate = perTypeValue(b, invoiceTypeName, "template");
+        return perTypeTemplate != null ? perTypeTemplate : b.getInvoiceTemplate();
+    }
+
+    private String resolvePaperSize(Business b, String invoiceTypeName) {
+        if (b == null) return null;
+        String perTypeSize = perTypeValue(b, invoiceTypeName, "paperSize");
+        return perTypeSize != null ? perTypeSize : "A4_PORTRAIT";
+    }
+
+    private String perTypeValue(Business b, String invoiceTypeName, String field) {
+        String json = b.getPrintSettings();
+        if (json == null || json.isBlank() || invoiceTypeName == null) return null;
+        try {
+            JsonNode root = OM.readTree(json);
+            JsonNode node = root.get(invoiceTypeName);
+            if (node == null || node.isNull()) return null;
+            if (node.isTextual()) {
+                // legacy format where the type maps directly to a paper size id
+                return field.equals("paperSize") ? node.asText() : null;
+            }
+            JsonNode f = node.get(field);
+            return (f != null && !f.isNull()) ? f.asText() : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private PublicInvoiceResponse.Seller seller(Business b) {

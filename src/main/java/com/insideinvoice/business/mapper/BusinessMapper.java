@@ -60,6 +60,8 @@ public class BusinessMapper {
                 .upiId(business.getUpiId())
                 .specialistIn(business.getSpecialistIn())
                 .specialistInEnabled(business.getSpecialistInEnabled())
+                .invoiceTemplate(business.getInvoiceTemplate())
+                .printSettings(business.getPrintSettings())
                 .createdAt(business.getCreatedAt())
                 .updatedAt(business.getUpdatedAt())
                 .build();

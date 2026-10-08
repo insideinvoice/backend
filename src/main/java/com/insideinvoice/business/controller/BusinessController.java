@@ -3,6 +3,7 @@ package com.insideinvoice.business.controller;
 import com.insideinvoice.auth.dto.response.ApiResponse;
 import com.insideinvoice.business.dto.request.BusinessSetupRequest;
 import com.insideinvoice.business.dto.request.BusinessUpdateRequest;
+import com.insideinvoice.business.dto.request.UpdateInvoiceSettingsRequest;
 import com.insideinvoice.business.dto.response.BusinessResponse;
 import com.insideinvoice.business.service.BusinessService;
 import com.insideinvoice.security.CurrentUser;
@@ -61,6 +62,15 @@ public class BusinessController {
             @CurrentUser UserPrincipal currentUser) {
         BusinessResponse response = businessService.updateBusiness(currentUser.getBusinessId(), request);
         return ResponseEntity.ok(ApiResponse.success("Business updated successfully", response));
+    }
+
+    @PutMapping("/invoice-settings")
+    @Operation(summary = "Update invoice template & print settings")
+    public ResponseEntity<ApiResponse<BusinessResponse>> updateInvoiceSettings(
+            @Valid @RequestBody UpdateInvoiceSettingsRequest request,
+            @CurrentUser UserPrincipal currentUser) {
+        BusinessResponse response = businessService.updateInvoiceSettings(currentUser.getBusinessId(), request);
+        return ResponseEntity.ok(ApiResponse.success("Invoice settings updated successfully", response));
     }
 
     @PostMapping(value = "/signature", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
