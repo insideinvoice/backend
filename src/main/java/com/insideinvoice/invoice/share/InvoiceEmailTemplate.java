@@ -100,15 +100,15 @@ public final class InvoiceEmailTemplate {
         html.append("</table></td></tr>");
 
         // ---- items ----
-        html.append("<tr><td style=\"padding:20px 40px 0;\">")
+        html.append("<tr><td style=\"padding:20px 24px 0;\">")
             .append("<p style=\"margin:0 0 8px;color:#0f172a;font-size:14px;font-weight:bold;\">Invoice summary</p>")
             .append("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"")
             .append(" style=\"border:1px solid #e2e8f0;border-radius:10px;border-collapse:collapse;\">")
             .append("<tr style=\"background-color:#f1f5f9;\">")
-            .append(th("#", "left", "36px")).append(th("Item", "left", null))
-            .append(th("Qty", "right", null)).append(th("Rate", "right", null))
-            .append(th("Taxable", "right", null)).append(th("GST", "right", null))
-            .append(th("Amount", "right", null)).append("</tr>");
+            .append(th("#", "left", "32px")).append(th("Item", "left", null))
+            .append(th("Qty", "right", "44px")).append(th("Rate", "right", "80px"))
+            .append(th("GST", "right", "48px"))
+            .append(th("Amount", "right", "88px")).append("</tr>");
 
         List<InvoiceItem> items = invoice.getItems() == null ? List.of() : invoice.getItems();
         int sno = 0;
@@ -122,7 +122,7 @@ public final class InvoiceEmailTemplate {
                     : taxable.add(item.getTaxAmount() != null ? item.getTaxAmount() : BigDecimal.ZERO);
             html.append("<tr>")
                 .append(td(String.valueOf(sno), "left", "color:#94a3b8;font-size:12px;"))
-                .append("<td style=\"padding:10px 8px;font-size:13px;color:#0f172a;border-top:1px solid #f1f5f9;\">")
+                .append("<td style=\"padding:10px 6px;font-size:13px;color:#0f172a;border-top:1px solid #f1f5f9;\">")
                 .append(esc(safe(item.getItemName())))
                 .append(notBlank(item.getHsn())
                         ? "<br><span style=\"color:#94a3b8;font-size:11px;\">HSN " + esc(item.getHsn().trim()) + "</span>"
@@ -130,7 +130,6 @@ public final class InvoiceEmailTemplate {
                 .append("</td>")
                 .append(td(stripZeros(qty), "right", "color:#334155;font-size:13px;"))
                 .append(td("\u20b9" + inr(rate), "right", "color:#334155;font-size:13px;"))
-                .append(td("\u20b9" + inr(taxable), "right", "color:#334155;font-size:13px;"))
                 .append(td(nvl(item.getGstPercentage()).stripTrailingZeros().toPlainString() + "%", "right",
                         "color:#334155;font-size:13px;"))
                 .append(td("\u20b9" + inr(amount), "right", "color:#0f172a;font-size:13px;font-weight:bold;"))
@@ -219,7 +218,7 @@ public final class InvoiceEmailTemplate {
     }
 
     private static String td(String text, String align, String style) {
-        return "<td align=\"" + align + "\" style=\"padding:10px 8px;border-top:1px solid #f1f5f9;" + style + "\">"
+        return "<td align=\"" + align + "\" style=\"padding:10px 6px;border-top:1px solid #f1f5f9;white-space:nowrap;" + style + "\">"
                 + esc(text) + "</td>";
     }
 

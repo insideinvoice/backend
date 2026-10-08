@@ -30,6 +30,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.apache.catalina.connector.ClientAbortException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -279,10 +281,36 @@ public class GlobalExceptionHandler {
         return error(status, reason);
     }
 
+    @ExceptionHandler({ClientAbortException.class, AsyncRequestNotUsableException.class})
+    public void handleClientAbort(Exception ex) {
+        // Client closed or aborted the TCP connection while the response was streaming.
+        // The socket is already closed, so avoid attempting to write an error response body.
+        log.debug("Client closed connection prematurely: {}", ex.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGlobalException(Exception ex) {
+        if (isClientAbort(ex)) {
+            log.debug("Client closed connection prematurely: {}", ex.getMessage());
+            return null;
+        }
         log.error("Unexpected error occurred", ex);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, GENERIC_500);
+    }
+
+    private static boolean isClientAbort(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            if (current instanceof ClientAbortException || current instanceof AsyncRequestNotUsableException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null && (message.contains("Broken pipe") || message.contains("Connection reset by peer"))) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private static ResponseEntity<ApiResponse<Void>> error(HttpStatus status, String message) {
