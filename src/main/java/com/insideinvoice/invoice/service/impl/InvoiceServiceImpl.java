@@ -155,8 +155,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             throw new BadRequestException("Invalid invoice status: " + request.getStatus());
         }
 
-        assertNumberAvailable(invoice, request.getInvoiceNumber(), invoice.getBusinessId());
-        invoice.setInvoiceNumber(request.getInvoiceNumber());
+        applyInvoiceNumber(invoice, request.getInvoiceNumber(), invoice.getBusinessId());
         invoice.setCustomerId(request.getCustomerId());
         invoice.setInvoiceType(invoiceType);
         invoice.setInvoiceDate(request.getInvoiceDate());
@@ -211,8 +210,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             throw new BadRequestException("Invalid invoice status: " + request.getStatus());
         }
 
-        assertNumberAvailable(invoice, request.getInvoiceNumber(), businessId);
-        invoice.setInvoiceNumber(request.getInvoiceNumber());
+        applyInvoiceNumber(invoice, request.getInvoiceNumber(), businessId);
         invoice.setCustomerId(request.getCustomerId());
         invoice.setInvoiceType(invoiceType);
         invoice.setInvoiceDate(request.getInvoiceDate());
@@ -266,18 +264,29 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     /**
-     * Shared guard for update paths: reject a duplicate invoice number up front (races
-     * still surface as 409 via DataIntegrityViolationException in the global handler)
-     * and reject null/blank (invoices.invoice_number is NOT NULL).
+     * Update paths accept an omitted invoiceNumber: both frontend save flows
+     * (InvoiceForm buildPayload and InvoiceView handleSave) only send the field in
+     * ghost mode, so "absent" means "keep the stored number" — overwriting it with
+     * null used to hit the NOT NULL column (500 before this release, 400 after the
+     * audit guard). When a number IS provided it is validated for length and
+     * uniqueness; races still surface as 409 via DataIntegrityViolationException.
      */
-    private void assertNumberAvailable(Invoice invoice, String number, Long businessId) {
-        if (number == null || number.isBlank()) {
-            throw new BadRequestException("Invoice number is required");
+    private void applyInvoiceNumber(Invoice invoice, String requested, Long businessId) {
+        if (requested == null || requested.isBlank()) {
+            if (invoice.getInvoiceNumber() == null || invoice.getInvoiceNumber().isBlank()) {
+                throw new BadRequestException("Invoice number is required");
+            }
+            return;
+        }
+        String number = requested.trim();
+        if (number.length() > 50) {
+            throw new BadRequestException("Invoice number must not exceed 50 characters");
         }
         if (!number.equals(invoice.getInvoiceNumber())
                 && invoiceRepository.existsByInvoiceNumberAndBusinessId(number, businessId)) {
             throw new BadRequestException("Invoice number " + number + " already exists");
         }
+        invoice.setInvoiceNumber(number);
     }
 
     private String getCustomerName(Long customerId, Long businessId) {
