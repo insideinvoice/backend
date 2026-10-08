@@ -62,6 +62,10 @@ public class CreateInvoiceRequest {
 
     private String paymentMode;
 
+    @jakarta.validation.constraints.DecimalMin(value = "0", message = "Discount percent must be >= 0")
+    @jakarta.validation.constraints.DecimalMax(value = "100", message = "Discount percent must be <= 100")
+    private java.math.BigDecimal discountPercent;
+
     @Valid
     @NotEmpty(message = "At least one invoice item is required")
     private List<InvoiceItemRequest> items;

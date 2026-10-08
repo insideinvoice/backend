@@ -52,6 +52,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
@@ -246,11 +248,17 @@ public class AdminController {
     public ResponseEntity<ApiResponse<List<InvoiceResponse>>> getBusinessInvoices(
             @PathVariable Long businessId) {
         List<Invoice> invoices = invoiceRepository.findAllByBusinessId(businessId);
+        Set<Long> customerIds = invoices.stream()
+                .map(Invoice::getCustomerId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> customerNames = customerIds.isEmpty() ? Map.of() :
+                customerRepository.findAllById(customerIds).stream()
+                        .collect(Collectors.toMap(Customer::getId, Customer::getName, (a, b) -> a));
+
         List<InvoiceResponse> result = invoices.stream()
                 .map(invoice -> {
-                    String customerName = customerRepository.findById(invoice.getCustomerId())
-                            .map(Customer::getName)
-                            .orElse("Unknown");
+                    String customerName = customerNames.getOrDefault(invoice.getCustomerId(), "Unknown");
                     return invoiceMapper.toResponse(invoice, customerName);
                 })
                 .toList();
@@ -262,16 +270,22 @@ public class AdminController {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllInvoices() {
         List<Invoice> invoices = invoiceRepository.findAll(
                 org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+
+        Set<Long> customerIds = invoices.stream().map(Invoice::getCustomerId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> businessIds = invoices.stream().map(Invoice::getBusinessId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> userIds = invoices.stream().map(Invoice::getCreatedBy).filter(Objects::nonNull).collect(Collectors.toSet());
+
+        Map<Long, String> customerNames = customerIds.isEmpty() ? Map.of() :
+                customerRepository.findAllById(customerIds).stream().collect(Collectors.toMap(com.insideinvoice.customer.entity.Customer::getId, com.insideinvoice.customer.entity.Customer::getName, (a, b) -> a));
+        Map<Long, String> businessNames = businessIds.isEmpty() ? Map.of() :
+                businessRepository.findAllById(businessIds).stream().collect(Collectors.toMap(com.insideinvoice.business.entity.Business::getId, com.insideinvoice.business.entity.Business::getBusinessName, (a, b) -> a));
+        Map<Long, String> userNames = userIds.isEmpty() ? Map.of() :
+                userRepository.findAllById(userIds).stream().collect(Collectors.toMap(com.insideinvoice.auth.entity.User::getId, com.insideinvoice.auth.entity.User::getName, (a, b) -> a));
+
         List<Map<String, Object>> result = invoices.stream().map(inv -> {
-            String customerName = customerRepository.findById(inv.getCustomerId())
-                    .map(com.insideinvoice.customer.entity.Customer::getName)
-                    .orElse("Unknown");
-            String businessName = businessRepository.findById(inv.getBusinessId())
-                    .map(com.insideinvoice.business.entity.Business::getBusinessName)
-                    .orElse("Unknown");
-            String ownerName = userRepository.findById(inv.getCreatedBy())
-                    .map(com.insideinvoice.auth.entity.User::getName)
-                    .orElse("Unknown");
+            String customerName = customerNames.getOrDefault(inv.getCustomerId(), "Unknown");
+            String businessName = businessNames.getOrDefault(inv.getBusinessId(), "Unknown");
+            String ownerName = userNames.getOrDefault(inv.getCreatedBy(), "Unknown");
             Map<String, Object> m = new HashMap<>();
             m.put("id", inv.getId());
             m.put("invoiceNumber", inv.getInvoiceNumber());

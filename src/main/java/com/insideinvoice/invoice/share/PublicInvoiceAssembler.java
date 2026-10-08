@@ -36,6 +36,7 @@ public class PublicInvoiceAssembler {
                 .subtotal(invoice.getSubtotal())
                 .taxAmount(invoice.getTaxAmount())
                 .grandTotal(invoice.getGrandTotal())
+                .discountPercent(invoice.getDiscountPercent())
                 .template(resolveTemplate(business, invoiceTypeName))
                 .paperSize(resolvePaperSize(business, invoiceTypeName))
                 .paymentTerms(invoice.getPaymentTerms())

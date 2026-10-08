@@ -65,6 +65,9 @@ public class Invoice extends BaseEntity {
     @Column(name = "grand_total", nullable = false, precision = 14, scale = 2)
     private BigDecimal grandTotal;
 
+    @Column(name = "discount_percent")
+    private BigDecimal discountPercent;
+
     @Column(name = "payment_terms")
     private String paymentTerms;
 

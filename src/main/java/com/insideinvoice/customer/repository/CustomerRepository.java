@@ -11,6 +11,8 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     Page<Customer> findByBusinessId(Long businessId, Pageable pageable);
 
+    java.util.List<Customer> findByIdInAndBusinessId(java.util.Collection<Long> ids, Long businessId);
+
     Optional<Customer> findByIdAndBusinessId(Long id, Long businessId);
 
     Optional<Customer> findByEmailAndBusinessId(String email, Long businessId);

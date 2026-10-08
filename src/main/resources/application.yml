@@ -24,6 +24,7 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_batch_fetch_size: 50
   servlet:
     multipart:
       # Aligned with the 1MB check in BusinessController.uploadSignature; oversized parts

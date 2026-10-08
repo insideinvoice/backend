@@ -29,6 +29,7 @@ public class InvoiceResponse {
     private BigDecimal subtotal;
     private BigDecimal taxAmount;
     private BigDecimal grandTotal;
+    private BigDecimal discountPercent;
     private String paymentTerms;
     private String notes;
     private String status;

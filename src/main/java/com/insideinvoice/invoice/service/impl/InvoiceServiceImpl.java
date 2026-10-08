@@ -30,6 +30,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class InvoiceServiceImpl implements InvoiceService {
@@ -93,11 +96,22 @@ public class InvoiceServiceImpl implements InvoiceService {
                 : Sort.by(sortBy).descending();
         Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, sort);
         Page<Invoice> invoices = invoiceRepository.findByBusinessId(businessId, pageable);
+        List<Invoice> content = invoices.getContent();
+
+        java.util.Set<Long> customerIds = content.stream()
+                .map(Invoice::getCustomerId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+
+        java.util.Map<Long, String> customerNames = customerIds.isEmpty()
+                ? java.util.Map.of()
+                : customerRepository.findByIdInAndBusinessId(customerIds, businessId).stream()
+                        .collect(java.util.stream.Collectors.toMap(Customer::getId, Customer::getName, (a, b) -> a));
 
         return PagedResponse.<InvoiceResponse>builder()
-                .content(invoices.getContent().stream()
+                .content(content.stream()
                         .map(invoice -> {
-                            String customerName = getCustomerName(invoice.getCustomerId(), businessId);
+                            String customerName = customerNames.getOrDefault(invoice.getCustomerId(), "Unknown");
                             return invoiceMapper.toResponse(invoice, customerName);
                         })
                         .toList())
@@ -174,6 +188,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setOtherReferences(request.getOtherReferences());
         invoice.setDestination(request.getDestination());
         invoice.setPaymentMode(request.getPaymentMode());
+        invoice.setDiscountPercent(request.getDiscountPercent() != null ? request.getDiscountPercent() : BigDecimal.ZERO);
 
         invoice.getItems().clear();
         for (InvoiceItemRequest itemRequest : request.getItems()) {
@@ -229,6 +244,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setOtherReferences(request.getOtherReferences());
         invoice.setDestination(request.getDestination());
         invoice.setPaymentMode(request.getPaymentMode());
+        invoice.setDiscountPercent(request.getDiscountPercent() != null ? request.getDiscountPercent() : BigDecimal.ZERO);
 
         invoice.getItems().clear();
         for (InvoiceItemRequest itemRequest : request.getItems()) {

@@ -39,6 +39,7 @@ public class InvoiceMapper {
                 .otherReferences(request.getOtherReferences())
                 .destination(request.getDestination())
                 .paymentMode(request.getPaymentMode())
+                .discountPercent(request.getDiscountPercent() != null ? request.getDiscountPercent() : BigDecimal.ZERO)
                 .createdBy(userId)
                 .build();
 
@@ -88,7 +89,10 @@ public class InvoiceMapper {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal grandTotal = subtotal.add(taxAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal pct = invoice.getDiscountPercent() != null ? invoice.getDiscountPercent() : BigDecimal.ZERO;
+        pct = pct.max(BigDecimal.ZERO).min(BigDecimal.valueOf(100));
+        BigDecimal discountAmount = subtotal.multiply(pct).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal grandTotal = subtotal.subtract(discountAmount).add(taxAmount).setScale(2, RoundingMode.HALF_UP);
 
         invoice.setSubtotal(subtotal);
         invoice.setTaxAmount(taxAmount);
@@ -112,6 +116,7 @@ public class InvoiceMapper {
                 .subtotal(invoice.getSubtotal())
                 .taxAmount(invoice.getTaxAmount())
                 .grandTotal(invoice.getGrandTotal())
+                .discountPercent(invoice.getDiscountPercent())
                 .paymentTerms(invoice.getPaymentTerms())
                 .notes(invoice.getNotes())
                 .status(invoice.getStatus().name())
@@ -126,6 +131,7 @@ public class InvoiceMapper {
                 .otherReferences(invoice.getOtherReferences())
                 .destination(invoice.getDestination())
                 .paymentMode(invoice.getPaymentMode())
+                .discountPercent(invoice.getDiscountPercent())
                 .createdBy(invoice.getCreatedBy())
                 .createdAt(invoice.getCreatedAt())
                 .updatedAt(invoice.getUpdatedAt())
