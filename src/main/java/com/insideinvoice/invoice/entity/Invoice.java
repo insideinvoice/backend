@@ -112,6 +112,20 @@ public class Invoice extends BaseEntity {
     @Column(name = "payment_mode", length = 20)
     private String paymentMode;
 
+    /** Opaque public share token (base64url of 256 random bits). NULL = never shared. */
+    @Column(name = "share_token", length = 64, unique = true)
+    private String shareToken;
+
+    @Column(name = "share_enabled", nullable = false)
+    @Builder.Default
+    private Boolean shareEnabled = false;
+
+    @Column(name = "share_created_at")
+    private java.time.LocalDateTime shareCreatedAt;
+
+    @Column(name = "share_revoked_at")
+    private java.time.LocalDateTime shareRevokedAt;
+
     @OneToMany(mappedBy = "invoice", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<InvoiceItem> items = new ArrayList<>();

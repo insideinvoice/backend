@@ -5,18 +5,20 @@ import com.insideinvoice.auth.entity.User;
 import com.insideinvoice.auth.repository.UserRepository;
 import com.insideinvoice.business.entity.Business;
 import com.insideinvoice.business.repository.BusinessRepository;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
 
 @Component
-// Removed @Profile("local") so it runs on any profile
+// Seeding the default admin used to run on every profile (the @Profile("local") guard
+// was removed). Combined with the hard-coded password this meant any fresh deployment
+// booted with a known ADMIN credential — platform takeover on first login. Seeding is
+// now opt-in via property; existing accounts are never touched.
 public class DataSeeder implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
@@ -24,6 +26,10 @@ public class DataSeeder implements CommandLineRunner {
     private final UserRepository userRepository;
     private final BusinessRepository businessRepository;
     private final PasswordEncoder passwordEncoder;
+
+    /** Off by default; enable explicitly (env APP_SEED_DEFAULT_ADMIN=true) for throwaway local/dev DBs. */
+    @Value("${app.seed-default-admin:false}")
+    private boolean seedDefaultAdmin;
 
     public DataSeeder(UserRepository userRepository, BusinessRepository businessRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
@@ -33,10 +39,13 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        // Create the admin user on the fly if not exists
-        // Username: invoiceinside, password: insideinvoice
         String adminUsername = "invoiceinside";
         String adminPassword = "insideinvoice";
+
+        if (!seedDefaultAdmin) {
+            log.debug("Default admin seeding disabled (app.seed-default-admin=false)");
+            return;
+        }
 
         if (!userRepository.existsByUsername(adminUsername)) {
             Business adminBusiness = Business.builder()
@@ -59,7 +68,8 @@ public class DataSeeder implements CommandLineRunner {
                     .build();
             userRepository.save(admin);
 
-            log.info("Default admin user created — username: {}, password: {}", adminUsername, adminPassword);
+            // Never log the password itself.
+            log.info("Default admin user created — username: {}", adminUsername);
         } else {
             log.info("Admin user already exists — skipping creation: {}", adminUsername);
         }

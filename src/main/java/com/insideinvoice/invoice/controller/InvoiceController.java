@@ -4,9 +4,13 @@ import com.insideinvoice.auth.dto.response.ApiResponse;
 import com.insideinvoice.common.Constants;
 import com.insideinvoice.common.dto.PagedResponse;
 import com.insideinvoice.invoice.dto.request.CreateInvoiceRequest;
+import com.insideinvoice.invoice.dto.request.SendInvoiceEmailRequest;
 import com.insideinvoice.invoice.dto.request.UpdateInvoiceRequest;
 import com.insideinvoice.invoice.dto.response.InvoiceResponse;
 import com.insideinvoice.invoice.service.InvoiceService;
+import com.insideinvoice.invoice.share.InvoiceEmailService;
+import com.insideinvoice.invoice.share.InvoiceShareService;
+import com.insideinvoice.invoice.share.dto.ShareLinkResponse;
 import com.insideinvoice.security.CurrentUser;
 import com.insideinvoice.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,6 +36,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
+    private final InvoiceShareService invoiceShareService;
+    private final InvoiceEmailService invoiceEmailService;
 
     @PostMapping
     @Operation(summary = "Create a new invoice")
@@ -83,5 +89,43 @@ public class InvoiceController {
             @CurrentUser UserPrincipal currentUser) {
         invoiceService.deleteInvoice(id, currentUser.getBusinessId());
         return ResponseEntity.ok(ApiResponse.success("Invoice deleted successfully"));
+    }
+
+    @PostMapping("/{id}/share")
+    @Operation(summary = "Create or retrieve the public share link")
+    public ResponseEntity<ApiResponse<ShareLinkResponse>> createShare(
+            @PathVariable Long id,
+            @CurrentUser UserPrincipal currentUser) {
+        ShareLinkResponse response = invoiceShareService.createOrRetrieve(id, currentUser.getBusinessId());
+        return ResponseEntity.ok(ApiResponse.success("Share link ready", response));
+    }
+
+    @DeleteMapping("/{id}/share")
+    @Operation(summary = "Revoke the public share link")
+    public ResponseEntity<ApiResponse<ShareLinkResponse>> revokeShare(
+            @PathVariable Long id,
+            @CurrentUser UserPrincipal currentUser) {
+        ShareLinkResponse response = invoiceShareService.revoke(id, currentUser.getBusinessId());
+        return ResponseEntity.ok(ApiResponse.success("Share link revoked", response));
+    }
+
+    @PostMapping("/{id}/share/regenerate")
+    @Operation(summary = "Issue a replacement share link and invalidate the previous token")
+    public ResponseEntity<ApiResponse<ShareLinkResponse>> regenerateShare(
+            @PathVariable Long id,
+            @CurrentUser UserPrincipal currentUser) {
+        ShareLinkResponse response = invoiceShareService.regenerate(id, currentUser.getBusinessId());
+        return ResponseEntity.ok(ApiResponse.success("New share link created", response));
+    }
+
+    @PostMapping("/{id}/email")
+    @Operation(summary = "Email the invoice and its share link to the customer")
+    public ResponseEntity<ApiResponse<Void>> sendInvoiceEmail(
+            @PathVariable Long id,
+            @RequestBody(required = false) SendInvoiceEmailRequest request,
+            @CurrentUser UserPrincipal currentUser) {
+        String recipient = invoiceEmailService.sendInvoiceEmail(
+                id, currentUser.getBusinessId(), request != null ? request.getFrontendOrigin() : null);
+        return ResponseEntity.ok(ApiResponse.success("Invoice email sent to " + recipient));
     }
 }

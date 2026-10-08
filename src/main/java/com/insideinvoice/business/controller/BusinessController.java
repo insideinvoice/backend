@@ -67,12 +67,19 @@ public class BusinessController {
     @Operation(summary = "Upload signature image (max 1MB)")
     public ResponseEntity<ApiResponse<String>> uploadSignature(
             @RequestParam("file") MultipartFile file,
-            @CurrentUser UserPrincipal currentUser) throws IOException {
+            @CurrentUser UserPrincipal currentUser) {
         if (file.getSize() > 1_048_576) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("File size must not exceed 1MB"));
         }
-        String base64 = Base64.getEncoder().encodeToString(file.getBytes());
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            // Client-side read failure (truncated/corrupt part) — a 400, not a generic 500.
+            throw new com.insideinvoice.exception.BadRequestException("Could not read uploaded file");
+        }
+        String base64 = Base64.getEncoder().encodeToString(bytes);
         businessService.updateSignature(currentUser.getBusinessId(), base64);
         return ResponseEntity.ok(ApiResponse.success("Signature uploaded successfully", base64));
     }

@@ -2,6 +2,7 @@ package com.insideinvoice.labels.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.insideinvoice.common.dto.PagedResponse;
+import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
 import com.insideinvoice.labels.dto.request.CreateHazmatLabelRequest;
 import com.insideinvoice.labels.dto.request.UpdateHazmatLabelRequest;
@@ -171,7 +172,7 @@ public class HazmatLabelServiceImpl implements HazmatLabelService {
 
     @Override
     public PagedResponse<HazmatLabelResponse> list(Long businessId, int page, int size, String q, String status) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<HazmatLabel> result = hazmatLabelRepository.search(
                 businessId, parseStatus(status), q == null || q.isBlank() ? "" : q, pageable);
         List<HazmatLabelResponse> content = new ArrayList<>();
@@ -234,6 +235,9 @@ public class HazmatLabelServiceImpl implements HazmatLabelService {
     @Override
     @Transactional
     public byte[] getPdf(Long id, Long businessId) throws Exception {
+        // Ownership check first: label_files has no businessId column, so serving the
+        // cached blob before getEntity() would leak another tenant's PDF (IDOR).
+        getEntity(id, businessId);
         LabelFile file = labelFileRepository.findByLabelIdAndLabelType(id, LabelKind.HAZMAT).orElse(null);
         if (file != null) {
             return file.getPdfBytes();
@@ -245,10 +249,12 @@ public class HazmatLabelServiceImpl implements HazmatLabelService {
     @Transactional
     public byte[] bulkPdf(List<Long> ids, Long businessId, Long userId, String ip) throws Exception {
         if (ids == null || ids.isEmpty()) {
-            throw new IllegalArgumentException("ids required");
+            throw new BadRequestException("At least one label id is required");
         }
         try (PDDocument out = new PDDocument()) {
             for (Long id : ids) {
+                // Same IDOR guard as getPdf: resolve ownership before serving cached bytes.
+                getEntity(id, businessId);
                 LabelFile file = labelFileRepository.findByLabelIdAndLabelType(id, LabelKind.HAZMAT).orElse(null);
                 byte[] pdf = file != null ? file.getPdfBytes() : generatePdf(id, businessId, userId, ip);
                 try (PDDocument in = Loader.loadPDF(pdf)) {
@@ -402,7 +408,7 @@ public class HazmatLabelServiceImpl implements HazmatLabelService {
     }
 
     private HazmatLabelResponse toResponse(HazmatLabel e) {
-        boolean hasPdf = labelFileRepository.findByLabelIdAndLabelType(e.getId(), LabelKind.HAZMAT).isPresent();
+        boolean hasPdf = labelFileRepository.existsByLabelIdAndLabelType(e.getId(), LabelKind.HAZMAT);
         return HazmatLabelResponse.builder()
                 .id(e.getId())
                 .labelNumber(e.getLabelNumber())

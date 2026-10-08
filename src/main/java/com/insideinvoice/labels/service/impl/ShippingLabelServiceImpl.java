@@ -6,6 +6,7 @@ import com.insideinvoice.business.repository.BusinessRepository;
 import com.insideinvoice.common.dto.PagedResponse;
 import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.customer.repository.CustomerRepository;
+import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.repository.InvoiceRepository;
@@ -174,7 +175,7 @@ public class ShippingLabelServiceImpl implements ShippingLabelService {
     @Override
     public PagedResponse<ShippingLabelResponse> list(Long businessId, int page, int size, String q,
                                                      String status, String carrier, Long invoiceId) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<ShippingLabel> result = shippingLabelRepository.search(
                 businessId, parseStatus(status), carrier == null || carrier.isBlank() ? "" : carrier, invoiceId, q == null || q.isBlank() ? "" : q, pageable);
         List<ShippingLabelResponse> content = new ArrayList<>();
@@ -237,6 +238,9 @@ public class ShippingLabelServiceImpl implements ShippingLabelService {
     @Override
     @Transactional
     public byte[] getPdf(Long id, Long businessId) throws Exception {
+        // Ownership check first: label_files has no businessId column, so serving the
+        // cached blob before getEntity() would leak another tenant's PDF (IDOR).
+        getEntity(id, businessId);
         LabelFile file = labelFileRepository.findByLabelIdAndLabelType(id, LabelKind.SHIPPING).orElse(null);
         if (file != null) {
             return file.getPdfBytes();
@@ -248,10 +252,12 @@ public class ShippingLabelServiceImpl implements ShippingLabelService {
     @Transactional
     public byte[] bulkPdf(List<Long> ids, Long businessId, Long userId, String ip) throws Exception {
         if (ids == null || ids.isEmpty()) {
-            throw new IllegalArgumentException("ids required");
+            throw new BadRequestException("At least one label id is required");
         }
         try (PDDocument out = new PDDocument()) {
             for (Long id : ids) {
+                // Same IDOR guard as getPdf: resolve ownership before serving cached bytes.
+                getEntity(id, businessId);
                 LabelFile file = labelFileRepository.findByLabelIdAndLabelType(id, LabelKind.SHIPPING).orElse(null);
                 byte[] pdf = file != null ? file.getPdfBytes() : generatePdf(id, businessId, userId, ip);
                 try (PDDocument in = Loader.loadPDF(pdf)) {
@@ -439,7 +445,7 @@ public class ShippingLabelServiceImpl implements ShippingLabelService {
 
     private ShippingLabelResponse toResponse(ShippingLabel e) {
         StoredShippingRefs refs = readRefs(e);
-        boolean hasPdf = labelFileRepository.findByLabelIdAndLabelType(e.getId(), LabelKind.SHIPPING).isPresent();
+        boolean hasPdf = labelFileRepository.existsByLabelIdAndLabelType(e.getId(), LabelKind.SHIPPING);
         return ShippingLabelResponse.builder()
                 .id(e.getId())
                 .labelNumber(e.getLabelNumber())

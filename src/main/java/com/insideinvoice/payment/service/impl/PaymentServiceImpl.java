@@ -38,7 +38,10 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public PaymentResponse createPayment(CreatePaymentRequest request, Long businessId) {
-        Invoice invoice = invoiceRepository.findByIdAndBusinessId(request.getInvoiceId(), businessId)
+        // Pessimistic row lock: two concurrent payments against the same invoice used to
+        // both read the same paid-total and both pass the remaining-balance check
+        // (overpayment, last-writer-wins status). The lock serializes the read-compute-write.
+        Invoice invoice = invoiceRepository.findByIdAndBusinessIdForUpdate(request.getInvoiceId(), businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", request.getInvoiceId()));
 
         if (request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
@@ -101,7 +104,7 @@ public class PaymentServiceImpl implements PaymentService {
         Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
                 ? Sort.by(sortBy).ascending()
                 : Sort.by(sortBy).descending();
-        Pageable pageable = PageRequest.of(page, size, sort);
+        Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, sort);
         Page<Payment> payments = paymentRepository.findByBusinessId(businessId, pageable);
 
         return PagedResponse.<PaymentResponse>builder()
@@ -123,7 +126,14 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional(readOnly = true)
     public List<PaymentResponse> getPaymentsByInvoice(Long invoiceId, Long businessId) {
-        List<Payment> payments = paymentRepository.findByInvoiceId(invoiceId);
+        // Ownership check: without it, any authenticated user could read another
+        // tenant's payment history by guessing invoice IDs (IDOR/BOLA). Uniform 404 so
+        // ID existence is never confirmed across tenants.
+        invoiceRepository.findByIdAndBusinessId(invoiceId, businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+        List<Payment> payments = paymentRepository.findByInvoiceId(invoiceId).stream()
+                .filter(p -> p.getBusinessId().equals(businessId))
+                .toList();
         Invoice invoice = invoiceRepository.findById(invoiceId).orElse(null);
         return payments.stream()
                 .map(p -> toResponse(p, invoice))
@@ -139,6 +149,26 @@ public class PaymentServiceImpl implements PaymentService {
             throw new ResourceNotFoundException("Payment", "id", id);
         }
         paymentRepository.delete(payment);
+
+        // Keep invoice status truthful: a PAID invoice whose only payment was deleted
+        // used to stay PAID forever, drifting balance/reporting.
+        invoiceRepository.findById(payment.getInvoiceId()).ifPresent(invoice -> {
+            if (invoice.getStatus() == InvoiceStatus.PAID || invoice.getStatus() == InvoiceStatus.PENDING) {
+                BigDecimal totalPaid = paymentRepository.findByInvoiceId(invoice.getId()).stream()
+                        .map(Payment::getAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                InvoiceStatus recomputed = totalPaid.compareTo(invoice.getGrandTotal()) >= 0
+                        ? InvoiceStatus.PAID
+                        : InvoiceStatus.PENDING;
+                if (invoice.getStatus() != recomputed) {
+                    invoice.setStatus(recomputed);
+                    invoiceRepository.save(invoice);
+                    log.info("Invoice {} status recomputed to {} after payment delete",
+                            invoice.getInvoiceNumber(), recomputed);
+                }
+            }
+        });
+
         log.info("Payment {} deleted for businessId: {}", id, businessId);
     }
 

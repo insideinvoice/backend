@@ -18,7 +18,10 @@ public final class Constants {
     public static final String API_EMAIL_INBOUND = "/api/email/inbound";
     public static final String API_SWAGGER = "/swagger-ui/**";
     public static final String API_API_DOCS = "/v3/api-docs/**";
-    public static final String API_ACTUATOR = "/actuator/**";
+    /** Token-gated public invoice sharing endpoints (the only anonymous invoice surface). */
+    public static final String API_PUBLIC = "/api/public/**";
+    public static final String API_ACTUATOR_HEALTH = "/actuator/health/**";
+    public static final String API_ACTUATOR_INFO = "/actuator/info";
     public static final String API_HEALTH = "/api/heartbeat";
 
     public static final int INVOICE_PREFIX_MAX_LENGTH = 10;

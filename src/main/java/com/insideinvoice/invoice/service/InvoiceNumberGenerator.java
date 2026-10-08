@@ -30,12 +30,27 @@ public class InvoiceNumberGenerator {
 
         Long sequence = business.getNextInvoiceSequence();
         String invoiceNumber = formatInvoiceNumber(business.getInvoicePrefix(), sequence);
+        assertWithinColumnLimit(invoiceNumber);
 
         business.setNextInvoiceSequence(sequence + 1);
         businessRepository.save(business);
 
         log.debug("Generated invoice number: {} for businessId: {}", invoiceNumber, businessId);
         return invoiceNumber;
+    }
+
+    /**
+     * invoices.invoice_number is VARCHAR(50) (V1:81) while businesses.invoice_prefix is
+     * VARCHAR(50) (V17): a long convention (e.g. "INV-RSHWE-2026-00001") overflowed the
+     * column and turned every future invoice creation for that business into a
+     * DataIntegrityViolation → 500. Fail fast with an actionable 400 instead.
+     */
+    private static void assertWithinColumnLimit(String invoiceNumber) {
+        if (invoiceNumber.length() > 50) {
+            throw new com.insideinvoice.exception.BadRequestException(
+                    "Invoice number '" + invoiceNumber + "' exceeds 50 characters. "
+                            + "Please shorten the invoice prefix/convention in business settings.");
+        }
     }
 
     @Transactional

@@ -14,4 +14,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findByBusinessIdOrderByCreatedAtDesc(Long businessId);
 
     List<Payment> findByInvoiceId(Long invoiceId);
+
+    boolean existsByInvoiceId(Long invoiceId);
+
+    void deleteByBusinessId(Long businessId);
 }

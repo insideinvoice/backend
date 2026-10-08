@@ -1,0 +1,40 @@
+spring:
+  datasource:
+    # Test-only database. Hard-guaranteed local: BaseIntegrationTest refuses to run
+    # against any host that is not localhost before the context starts.
+    url: jdbc:postgresql://localhost:5433/inside_invoice_test
+    username: insideinvoice
+    password: invoiceinside
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 4
+      minimum-idle: 1
+      idle-timeout: 60000
+      connection-timeout: 10000
+      max-lifetime: 300000
+  jpa:
+    show-sql: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    schemas: public
+
+backup:
+  enabled: false
+
+app:
+  public:
+    rate-limit:
+      # Generous by default so sharing/authorization tests never trip the limiter.
+      # PublicRateLimitTest overrides these in its own context.
+      requests-per-minute-per-ip: 100000
+      requests-per-minute-per-token: 100000
+
+logging:
+  level:
+    root: WARN
+    com.insideinvoice: INFO
+    org.springframework: WARN
+    org.flywaydb: WARN
+    org.hibernate: WARN

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface ShippingLabelRepository extends JpaRepository<ShippingLabel, Long> {
@@ -17,6 +18,14 @@ public interface ShippingLabelRepository extends JpaRepository<ShippingLabel, Lo
     long countByBusinessIdAndDeletedAtIsNull(Long businessId);
 
     boolean existsByBusinessIdAndLabelNumber(Long businessId, String labelNumber);
+
+    /** All rows incl. soft-deleted — used by admin purge and label-file cleanup. */
+    List<Long> findIdByBusinessId(Long businessId);
+
+    void deleteByBusinessId(Long businessId);
+
+    /** Soft-deleted rows keep their FK, so the pre-check must not filter deletedAt. */
+    boolean existsByInvoiceId(Long invoiceId);
 
     Page<ShippingLabel> findByBusinessIdAndDeletedAtIsNull(Long businessId, Pageable pageable);
 

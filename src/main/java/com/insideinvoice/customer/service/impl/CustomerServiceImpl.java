@@ -8,7 +8,9 @@ import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.customer.mapper.CustomerMapper;
 import com.insideinvoice.customer.repository.CustomerRepository;
 import com.insideinvoice.customer.service.CustomerService;
+import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
+import com.insideinvoice.invoice.repository.InvoiceRepository;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -28,6 +30,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     private final CustomerRepository customerRepository;
     private final CustomerMapper customerMapper;
+    private final InvoiceRepository invoiceRepository;
 
     @Override
     @Transactional
@@ -77,7 +80,7 @@ public class CustomerServiceImpl implements CustomerService {
         Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
                 ? Sort.by(sortBy).ascending()
                 : Sort.by(sortBy).descending();
-        Pageable pageable = PageRequest.of(page, size, sort);
+        Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, sort);
         Page<Customer> customers = customerRepository.findByBusinessId(businessId, pageable);
 
         return PagedResponse.<CustomerResponse>builder()
@@ -136,6 +139,14 @@ public class CustomerServiceImpl implements CustomerService {
     public void deleteCustomer(Long id, Long businessId) {
         Customer customer = customerRepository.findByIdAndBusinessId(id, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
+
+        // fk_invoices_customer (V1:105, NO ACTION) turns this into a raw
+        // DataIntegrityViolationException → 500 with the row still present; pre-check
+        // so the client gets an actionable 400.
+        if (invoiceRepository.existsByCustomerId(id)) {
+            throw new BadRequestException("Cannot delete customer: invoices exist for this customer");
+        }
+
         customerRepository.delete(customer);
 
         log.info("Customer deleted: {} for businessId: {}", id, businessId);

@@ -19,20 +19,28 @@ spring:
       connection-timeout: 20000
       max-lifetime: 1200000
   jpa:
-    show-sql: true
+    # SQL logging off: show-sql wrote statements with row/PII values into production logs.
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  servlet:
+    multipart:
+      # Aligned with the 1MB check in BusinessController.uploadSignature; oversized parts
+      # now fail at the container edge as MaxUploadSizeExceededException → 413.
+      max-file-size: 1MB
+      max-request-size: 2MB
   flyway:
     enabled: true
     baseline-on-migrate: true
     locations: classpath:db/migration
     schemas: public
-  mail:
-    resend-api-key: cmVfS3ZxSjNTeFBfRGRNdkREM3NRendtUXZYa21TYzNlMmFm
-    from: noreply@insideinvoice.com
-    logo-url: https://your-public-logo-url
-    contact-email: insideinvoice87@gmail.com
+  task:
+    scheduling:
+      # Backup scheduler previously owned the only scheduling thread: a hung pg_dump
+      # wedged every other scheduled task. Give backups their own room.
+      pool:
+        size: 2
 management:
   endpoints:
     web:
@@ -58,6 +66,16 @@ backup:
     client-secret: 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
     refresh-token: 1//0g8UpdnP4HBVYCgYIARAAGBASNwF-L9IrJ2PwNDNrROswu-1AdxpcUr5PVyhxp0p8-FoL9RPExx8G61Mw8B7g5xmgTAQOexJRyjE
 app:
+  # Canonical frontend origin — fallback for share links built by the server
+  # (public invoice emails). The frontend passes its own origin when it can.
+  frontend-base-url: https://insideinvoice.in
+  # NOTE: keys live under app.mail.* — EmailService reads ${app.mail.*}.
+  # The resend-api-key value is base64-encoded (decoded before use).
+  mail:
+    resend-api-key: cmVfTW13bkNIZ0NfR3RZenVQNWk4aHVWaWM2N2gxN3hlSmdW
+    from: noreply@insideinvoice.com
+    logo-url: https://your-public-logo-url
+    contact-email: insideinvoice87@gmail.com
   jwt:
     secret: NGE2ZjY4NmU0NDZmNjU1MzY1NjM3MjY1NzQ1NjY1NzI3OTU2NjU3Mjc5NTM2NTYzNzI2NTc0NGI2NTc5NDY2ZjcyNGE1NzU0NTM2OTY3NmU2OTZlNjc0MTZlNjQ0NTZlNjM3Mjc5NzA3NDY5NmY2ZQ==
     expiration-ms: 10800000

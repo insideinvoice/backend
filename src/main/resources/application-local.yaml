@@ -22,6 +22,9 @@ spring:
 
 app:
   base-url: http://localhost:8080
+  frontend-base-url: http://localhost:5173
+  # Local-only convenience: seed invoiceinside on a fresh dev DB. Never on in prod.
+  seed-default-admin: true
 
 backup:
   enabled: false

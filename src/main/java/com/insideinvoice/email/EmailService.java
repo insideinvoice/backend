@@ -1,5 +1,6 @@
 package com.insideinvoice.email;
 
+import com.insideinvoice.exception.EmailDeliveryException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -11,18 +12,22 @@ import java.util.UUID;
 @Service
 @Slf4j
 public class EmailService {
-    private final RestTemplate restTemplate = new RestTemplate();
+    // Bounded timeouts: a hung provider must never pin a request thread (or a
+    // database connection held by the calling flow) indefinitely.
+    private final RestTemplate restTemplate = createRestTemplate();
+
+    private static RestTemplate createRestTemplate() {
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory =
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10_000);
+        factory.setReadTimeout(20_000);
+        return new RestTemplate(factory);
+    }
 
     private static final String LOGO_DATA_URI = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNTYgMjU2IiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxyZWN0IHdpZHRoPSIyNTYiIGhlaWdodD0iMjU2IiByeD0iNTYiIGZpbGw9InVybCgjZ3JhZDEpIi8+CiAgPGNpcmNsZSBjeD0iMjIwIiBjeT0iMzYiIHI9IjQ4IiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iMC4wNSIvPgogIDxjaXJjbGUgY3g9IjM2IiBjeT0iMjIwIiByPSI2NCIgZmlsbD0id2hpdGUiIG9wYWNpdHk9IjAuMDUiLz4KICA8Y2lyY2xlIGN4PSI5NiIgY3k9IjgwIiByPSIyMCIgZmlsbD0id2hpdGUiLz4KICA8cmVjdCB4PSI3NiIgeT0iMTEyIiB3aWR0aD0iNDAiIGhlaWdodD0iOTYiIHJ4PSIyMCIgZmlsbD0id2hpdGUiLz4KICA8Y2lyY2xlIGN4PSIxNzYiIGN5PSIxMDQiIHI9IjE0LjQiIGZpbGw9IndoaXRlIiBvcGFjaXR5PSIwLjk1Ii8+CiAgPHJlY3QgeD0iMTYxLjYiIHk9IjEzNiIgd2lkdGg9IjI4LjgiIGhlaWdodD0iNzIiIHJ4PSIxNC40IiBmaWxsPSJ3aGl0ZSIgb3BhY2l0eT0iMC45NSIvPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJncmFkMSIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMzMzQxNTU7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICAgIDxzdG9wIG9mZnNldD0iNTAlIiBzdHlsZT0ic3RvcC1jb2xvcjojNDc1NTY5O3N0b3Atb3BhY2l0eToxIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiMxZTI5M2I7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KPC9zdmc;";
 
     @Value("${app.mail.resend-api-key:}")
     private String resendApiKey;
-
-    @Value("${app.jwt.secret:}")
-    private String jwtSecretEnc;
-
-    @Value("${app.encryption.key:}")
-    private String encryptionKeyEnc;
 
     @Value("${app.mail.from:noreply@insideinvoice.com}")
     private String mailFrom;
@@ -39,7 +44,7 @@ public class EmailService {
             String subject = "Your Inside Invoice Verification Code";
             String htmlContent = buildOtpHtml(otp);
             String textContent = buildOtpText(otp);
-            sendViaResend(toEmail, subject, htmlContent, textContent, null);
+            sendViaResend("Inside Invoice", toEmail, subject, htmlContent, textContent, null);
             log.info("OTP email sent to: {}", toEmail);
         } catch (Exception e) {
             log.error("Failed to send OTP email to: {}", toEmail, e);
@@ -55,11 +60,52 @@ public class EmailService {
             String subject = "Inside Invoice Enquiry: " + name;
             String htmlContent = buildContactHtml(name, email, phone, message);
             String textContent = buildContactText(name, email, phone, message);
-            sendViaResend(contactEmail, subject, htmlContent, textContent, email);
+            sendViaResend("Inside Invoice", contactEmail, subject, htmlContent, textContent, email);
             log.info("Contact enquiry email sent to: {} | Subject: {}", contactEmail, subject);
         } catch (Exception e) {
             log.error("Failed to send contact email", e);
         }
+    }
+
+    /**
+     * Sends a fully-rendered HTML email and REPORTS failure to the caller.
+     * Unlike the OTP/contact helpers (which log-and-skip), invoice emails are an
+     * explicit user action: unconfigured mail → 503, provider failure → 502.
+     *
+     * @param fromName display name for the From header, e.g. the user's business name
+     */
+    public void sendHtmlEmail(String fromName, String toEmail, String subject, String htmlContent, String textContent, String replyTo) {
+        if (resolveApiKey(resendApiKey).isEmpty()) {
+            throw new EmailDeliveryException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Email sending is not configured on this server");
+        }
+        try {
+            sendViaResend(fromName, toEmail, subject, htmlContent, textContent, replyTo);
+            log.info("Email sent via Resend | from: {} <{}> | to: {} | subject: {}", fromName, mailFrom, toEmail, subject);
+        } catch (EmailDeliveryException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to send email to {} | subject: {}", toEmail, subject, e);
+            throw new EmailDeliveryException(HttpStatus.BAD_GATEWAY,
+                    "Could not send the email right now. Please try again.");
+        }
+    }
+
+    /**
+     * The stored key may be raw ({@code re_...}) or base64-encoded (the historic
+     * config convention). Accept both so a pasted dashboard key just works;
+     * only a decode that yields a Resend-shaped key is trusted.
+     */
+    static String resolveApiKey(String stored) {
+        if (stored == null || stored.isBlank()) return "";
+        String trimmed = stored.trim();
+        try {
+            String decoded = new String(java.util.Base64.getDecoder().decode(trimmed)).trim();
+            if (decoded.startsWith("re_")) return decoded;
+        } catch (IllegalArgumentException ignored) {
+            // Not base64 — fall through and use the raw value.
+        }
+        return trimmed;
     }
 
     public void sendRawEmail(String toEmail, String subject, String textContent) {
@@ -68,7 +114,7 @@ public class EmailService {
             return;
         }
         try {
-            sendViaResend(toEmail, subject, "<pre style=\"white-space:pre-wrap;font-family:monospace;\">"
+            sendViaResend("Inside Invoice", toEmail, subject, "<pre style=\"white-space:pre-wrap;font-family:monospace;\">"
                     + escapeHtml(textContent) + "</pre>", textContent, null);
             log.info("Raw email forwarded to: {}", toEmail);
         } catch (Exception e) {
@@ -76,9 +122,22 @@ public class EmailService {
         }
     }
 
-    private void sendViaResend(String toEmail, String subject, String htmlContent, String textContent, String replyTo) throws Exception {
+    /**
+     * Display names land in an RFC 5322 header: strip CR/LF (header injection)
+     * and the characters that would unbalance the quoted name.
+     * Package-private for tests.
+     */
+    static String sanitizeFromName(String fromName) {
+        if (fromName == null || fromName.isBlank()) {
+            return "Inside Invoice";
+        }
+        String cleaned = fromName.replaceAll("[\\r\\n]", " ").replace('"', '\'').trim();
+        return cleaned.isBlank() ? "Inside Invoice" : cleaned;
+    }
+
+    private void sendViaResend(String fromName, String toEmail, String subject, String htmlContent, String textContent, String replyTo) throws Exception {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
-        body.put("from", "Inside Invoice <" + mailFrom + ">");
+        body.put("from", sanitizeFromName(fromName) + " <" + mailFrom + ">");
         body.put("to", new String[]{toEmail});
         body.put("subject", subject);
         body.put("html", htmlContent);
@@ -92,16 +151,10 @@ public class EmailService {
                 "X-Mailer", "Inside Invoice"
         ));
         HttpHeaders headers = new HttpHeaders();
-
-        // Base64 decode all sensitive credentials from application.properties
-        // Resend API key
-        String actualResendApiKey = new String(java.util.Base64.getDecoder().decode(resendApiKey));
-        // JWT secret - not used directly for auth but stored securely
-        String jwtSecret = new String(java.util.Base64.getDecoder().decode(jwtSecretEnc));
-        // Encryption key
-        String encryptionKey = new String(java.util.Base64.getDecoder().decode(encryptionKeyEnc));
-
         headers.setContentType(MediaType.APPLICATION_JSON);
+        // Attach the API key as the bearer token (it was previously decoded but
+        // never sent — every Resend call failed with 401).
+        headers.setBearerAuth(resolveApiKey(resendApiKey));
         ResponseEntity<String> response = restTemplate.exchange(
                 "https://api.resend.com/emails",
                 HttpMethod.POST,

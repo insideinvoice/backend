@@ -17,6 +17,10 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+// Update only the columns actually changed: without this, Hibernate's full-row UPDATE
+// wrote stale nextInvoiceSequence values from other sessions back to the DB and could
+// roll the sequence backwards (duplicate invoice numbers under concurrency).
+@org.hibernate.annotations.DynamicUpdate
 public class Business extends BaseEntity {
 
     @Column(name = "business_name", nullable = false)

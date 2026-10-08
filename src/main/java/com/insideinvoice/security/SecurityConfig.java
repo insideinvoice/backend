@@ -2,6 +2,7 @@ package com.insideinvoice.security;
 
 import com.insideinvoice.common.Constants;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -29,13 +30,24 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+
+    /**
+     * Explicit frontend origins only (comma-separated property). CORS is a browser
+     * companion control, never an authorization mechanism - server-side ownership checks
+     * remain the actual protection for invoice data.
+     */
+    @Value("${app.cors.allowed-origins:https://insideinvoice.in,https://www.insideinvoice.in,https://insideinvoice.netlify.app,http://localhost:5173,http://localhost:4173}")
+    private List<String> allowedOrigins;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
-                .exceptionHandling(ex -> ex.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(Constants.API_AUTH).permitAll()
@@ -43,8 +55,12 @@ public class SecurityConfig {
                         .requestMatchers(Constants.API_EMAIL_INBOUND).permitAll()
                         .requestMatchers(Constants.API_SWAGGER).permitAll()
                         .requestMatchers(Constants.API_API_DOCS).permitAll()
-                        .requestMatchers(Constants.API_ACTUATOR).permitAll()
+                        // Only liveness/readiness + info stay anonymous; /actuator/metrics etc. need auth.
+                        .requestMatchers(Constants.API_ACTUATOR_HEALTH).permitAll()
+                        .requestMatchers(Constants.API_ACTUATOR_INFO).permitAll()
                         .requestMatchers(Constants.API_HEALTH).permitAll()
+                        // The single anonymous invoice surface; gated by share token + rate limit.
+                        .requestMatchers(Constants.API_PUBLIC).permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -55,7 +71,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        configuration.setAllowedOriginPatterns(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"));
         configuration.setAllowCredentials(true);

@@ -12,7 +12,8 @@ spring:
       max-lifetime: 1200000
 
   jpa:
-    show-sql: true
+    # SQL logging off in prod: show-sql wrote statements with row/PII values into logs.
+    show-sql: false
 
   flyway:
     enabled: true
@@ -22,6 +23,7 @@ spring:
 
 app:
   base-url: https://backend-production-1509.up.railway.app
+  frontend-base-url: https://insideinvoice.in
 
 backup:
   enabled: true

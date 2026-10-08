@@ -17,6 +17,9 @@ import com.insideinvoice.invoice.repository.InvoiceItemRepository;
 import com.insideinvoice.invoice.repository.InvoiceRepository;
 import com.insideinvoice.invoice.service.InvoiceNumberGenerator;
 import com.insideinvoice.invoice.service.InvoiceService;
+import com.insideinvoice.labels.repository.HazmatLabelRepository;
+import com.insideinvoice.labels.repository.ShippingLabelRepository;
+import com.insideinvoice.payment.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +41,9 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final CustomerRepository customerRepository;
     private final InvoiceMapper invoiceMapper;
     private final InvoiceNumberGenerator invoiceNumberGenerator;
+    private final PaymentRepository paymentRepository;
+    private final ShippingLabelRepository shippingLabelRepository;
+    private final HazmatLabelRepository hazmatLabelRepository;
 
     @Override
     @Transactional
@@ -85,7 +91,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
                 ? Sort.by(sortBy).ascending()
                 : Sort.by(sortBy).descending();
-        Pageable pageable = PageRequest.of(page, size, sort);
+        Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, sort);
         Page<Invoice> invoices = invoiceRepository.findByBusinessId(businessId, pageable);
 
         return PagedResponse.<InvoiceResponse>builder()
@@ -149,6 +155,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             throw new BadRequestException("Invalid invoice status: " + request.getStatus());
         }
 
+        assertNumberAvailable(invoice, request.getInvoiceNumber(), invoice.getBusinessId());
         invoice.setInvoiceNumber(request.getInvoiceNumber());
         invoice.setCustomerId(request.getCustomerId());
         invoice.setInvoiceType(invoiceType);
@@ -204,6 +211,7 @@ public class InvoiceServiceImpl implements InvoiceService {
             throw new BadRequestException("Invalid invoice status: " + request.getStatus());
         }
 
+        assertNumberAvailable(invoice, request.getInvoiceNumber(), businessId);
         invoice.setInvoiceNumber(request.getInvoiceNumber());
         invoice.setCustomerId(request.getCustomerId());
         invoice.setInvoiceType(invoiceType);
@@ -241,9 +249,35 @@ public class InvoiceServiceImpl implements InvoiceService {
     public void deleteInvoice(Long id, Long businessId) {
         Invoice invoice = invoiceRepository.findByIdAndBusinessId(id, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
+
+        // FK order in the schema blocks the delete (fk_payments_invoice V8:13,
+        // fk_shipping/hazmat_labels_invoice V14:37,87) — surface it as a 400 with an
+        // actionable message instead of a raw DataIntegrityViolationException → 500.
+        if (paymentRepository.existsByInvoiceId(id)) {
+            throw new BadRequestException("Cannot delete invoice: payments are recorded against it");
+        }
+        if (shippingLabelRepository.existsByInvoiceId(id) || hazmatLabelRepository.existsByInvoiceId(id)) {
+            throw new BadRequestException("Cannot delete invoice: shipping/hazmat labels reference it");
+        }
+
         invoiceRepository.delete(invoice);
 
         log.info("Invoice deleted: {} for businessId: {}", id, businessId);
+    }
+
+    /**
+     * Shared guard for update paths: reject a duplicate invoice number up front (races
+     * still surface as 409 via DataIntegrityViolationException in the global handler)
+     * and reject null/blank (invoices.invoice_number is NOT NULL).
+     */
+    private void assertNumberAvailable(Invoice invoice, String number, Long businessId) {
+        if (number == null || number.isBlank()) {
+            throw new BadRequestException("Invoice number is required");
+        }
+        if (!number.equals(invoice.getInvoiceNumber())
+                && invoiceRepository.existsByInvoiceNumberAndBusinessId(number, businessId)) {
+            throw new BadRequestException("Invoice number " + number + " already exists");
+        }
     }
 
     private String getCustomerName(Long customerId, Long businessId) {

@@ -14,4 +14,6 @@ public interface DeliveryChallanRepository extends JpaRepository<DeliveryChallan
     Optional<DeliveryChallan> findByIdAndBusinessId(Long id, Long businessId);
 
     boolean existsByBusinessIdAndChallanNumber(Long businessId, String challanNumber);
+
+    void deleteByBusinessId(Long businessId);
 }

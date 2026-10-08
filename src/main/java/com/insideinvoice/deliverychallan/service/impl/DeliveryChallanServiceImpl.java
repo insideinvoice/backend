@@ -1,5 +1,6 @@
 package com.insideinvoice.deliverychallan.service.impl;
 
+import com.insideinvoice.business.repository.BusinessRepository;
 import com.insideinvoice.common.dto.PagedResponse;
 import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.customer.repository.CustomerRepository;
@@ -33,7 +34,7 @@ public class DeliveryChallanServiceImpl implements DeliveryChallanService {
 
     private final DeliveryChallanRepository deliveryChallanRepository;
     private final CustomerRepository customerRepository;
-
+    private final BusinessRepository businessRepository;
     private static final DateTimeFormatter DC_NUMBER_TS = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     @Override
@@ -42,6 +43,12 @@ public class DeliveryChallanServiceImpl implements DeliveryChallanService {
             Long userId) {
         Customer customer = customerRepository.findByIdAndBusinessId(request.getCustomerId(), businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
+
+        // Serialize challan-number generation per business (same trick as
+        // InvoiceNumberGenerator): the timestamp + existsBy loop raced on
+        // uq_delivery_challans_number and turned concurrent creates into 500s.
+        businessRepository.findByIdWithLock(businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Business", "id", businessId));
 
         String challanNumber = request.getChallanNumber();
         if (challanNumber == null || challanNumber.isBlank()) {
@@ -92,7 +99,7 @@ public class DeliveryChallanServiceImpl implements DeliveryChallanService {
         Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
                 ? Sort.by(sortBy).ascending()
                 : Sort.by(sortBy).descending();
-        Pageable pageable = PageRequest.of(page, size, sort);
+        Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, sort);
         Page<DeliveryChallan> challans = deliveryChallanRepository.findByBusinessId(businessId, pageable);
 
         return PagedResponse.<DeliveryChallanResponse>builder()
@@ -124,9 +131,14 @@ public class DeliveryChallanServiceImpl implements DeliveryChallanService {
         deliveryChallanRepository.delete(challan);
     }
 
+    /**
+     * Null-tolerant: V16 has no FK from delivery_challans to customers, so a deleted
+     * customer must not 404 the entire list (orElseThrow here made GET /delivery-challans
+     * return 404 after any customer deletion). toResponse renders null customer fields
+     * as null — same tolerance InvoiceServiceImpl uses with .orElse("Unknown").
+     */
     private Customer findCustomer(Long customerId, Long businessId) {
-        return customerRepository.findByIdAndBusinessId(customerId, businessId)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", customerId));
+        return customerRepository.findByIdAndBusinessId(customerId, businessId).orElse(null);
     }
 
     private DeliveryChallanResponse toResponse(DeliveryChallan challan, Customer customer) {

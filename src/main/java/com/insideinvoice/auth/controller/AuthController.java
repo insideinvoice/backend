@@ -97,7 +97,7 @@ public class AuthController {
     @Operation(summary = "Update user profile (name)")
     public ResponseEntity<ApiResponse<Void>> updateProfile(
             @Valid @RequestBody UpdateProfileRequest request) {
-        UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        UserPrincipal principal = currentPrincipal();
         authService.updateProfile(request, principal.getId());
         return ResponseEntity.ok(ApiResponse.success("Profile updated"));
     }
@@ -106,8 +106,22 @@ public class AuthController {
     @Operation(summary = "Change user password")
     public ResponseEntity<ApiResponse<Void>> changePassword(
             @Valid @RequestBody ChangePasswordRequest request) {
-        UserPrincipal principal = (UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        UserPrincipal principal = currentPrincipal();
         ApiResponse<Void> response = authService.changePassword(request, principal.getId());
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * These endpoints live under the permitAll {@code /api/auth/**} prefix, so an
+     * anonymous request arrives with the anonymous-user string as principal. Casting it
+     * blindly to UserPrincipal threw ClassCastException → 500; resolve safely to 401
+     * (the axios interceptor then forces a clean logout).
+     */
+    private UserPrincipal currentPrincipal() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal principal)) {
+            throw new com.insideinvoice.exception.UnauthorizedException("Authentication required");
+        }
+        return principal;
     }
 }

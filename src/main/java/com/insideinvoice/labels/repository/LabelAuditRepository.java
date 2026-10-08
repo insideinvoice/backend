@@ -9,4 +9,6 @@ import java.util.List;
 public interface LabelAuditRepository extends JpaRepository<LabelAudit, Long> {
 
     List<LabelAudit> findByLabelIdAndLabelTypeOrderByCreatedAtDesc(Long labelId, LabelKind labelType);
+
+    void deleteByBusinessId(Long businessId);
 }

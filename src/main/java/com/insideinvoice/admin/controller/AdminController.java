@@ -3,6 +3,7 @@ package com.insideinvoice.admin.controller;
 import com.insideinvoice.admin.dto.AdminStatsResponse;
 import com.insideinvoice.admin.dto.UpdatePasswordRequest;
 import com.insideinvoice.admin.dto.UserWithPasswordResponse;
+import com.insideinvoice.admin.service.AdminDeletionService;
 import com.insideinvoice.auth.dto.response.ApiResponse;
 import com.insideinvoice.auth.entity.Role;
 import com.insideinvoice.auth.entity.User;
@@ -75,6 +76,7 @@ public class AdminController {
     private final InvoiceService invoiceService;
     private final CustomerMapper customerMapper;
     private final ProductMapper productMapper;
+    private final AdminDeletionService adminDeletionService;
 
     @GetMapping("/users")
     @Operation(summary = "Get all users with passwords (Admin only)")
@@ -380,19 +382,7 @@ public class AdminController {
             }
         }
 
-        Long businessId = user.getBusinessId();
-
-        productRepository.deleteByBusinessId(businessId);
-        customerRepository.deleteByBusinessId(businessId);
-        invoiceRepository.deleteByBusinessId(businessId);
-
-        userRepository.delete(user);
-
-        long remainingUsers = userRepository.countByBusinessId(businessId);
-        if (remainingUsers == 0) {
-            businessRepository.deleteById(businessId);
-            log.info("Deleted business {} as well (no remaining users)", businessId);
-        }
+        adminDeletionService.deleteUserWithBusinessData(user);
 
         log.info("Admin deleted user: {}", user.getEmail());
         return ResponseEntity.ok(ApiResponse.success("User and their data deleted successfully"));
@@ -405,17 +395,17 @@ public class AdminController {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (updates.containsKey("name")) {
-            user.setName((String) updates.get("name"));
+            user.setName(stringField(updates, "name"));
         }
         if (updates.containsKey("email")) {
-            String newEmail = (String) updates.get("email");
+            String newEmail = stringField(updates, "email");
             if (!newEmail.equals(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
                 throw new BadRequestException("Email already in use");
             }
             user.setEmail(newEmail);
         }
         if (updates.containsKey("username")) {
-            String newUsername = (String) updates.get("username");
+            String newUsername = stringField(updates, "username");
             if (!newUsername.equals(user.getUsername()) && userRepository.existsByUsername(newUsername)) {
                 throw new BadRequestException("Username already in use");
             }
@@ -432,6 +422,27 @@ public class AdminController {
         result.put("username", user.getUsername());
         result.put("role", user.getRole().name());
         return ResponseEntity.ok(ApiResponse.success("User updated successfully", result));
+    }
+
+    /**
+     * Typed extraction for the ad-hoc update map. The old code cast blindly
+     * ({@code (String) updates.get("name")} → ClassCastException on a JSON number) and
+     * dereferenced nulls ({@code newEmail.equals(...)} → NPE when the client sent
+     * {@code {"email": null}}), both surfacing as 500s.
+     */
+    private static String stringField(Map<String, Object> updates, String key) {
+        Object value = updates.get(key);
+        if (value == null) {
+            throw new BadRequestException("Field '" + key + "' must not be null");
+        }
+        if (!(value instanceof String text)) {
+            throw new BadRequestException("Field '" + key + "' must be text");
+        }
+        String trimmed = text.trim();
+        if (trimmed.isEmpty()) {
+            throw new BadRequestException("Field '" + key + "' must not be blank");
+        }
+        return trimmed;
     }
 
     @GetMapping("/products")

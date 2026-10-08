@@ -133,7 +133,10 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional
+    // Deliberately NOT @Transactional: the Resend HTTP call (connect 10s / read 20s)
+    // must not run while holding one of the 10 Hikari connections. The save below runs
+    // in its own short transaction; a failed email now leaves the OTP stored instead of
+    // rolling it back, and the user can simply request another one.
     public ApiResponse<Void> sendOtp(ForgotPasswordRequest request) {
         User user = userRepository.findByEmail(request.getEmail()).orElse(null);
 
@@ -155,6 +158,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public ApiResponse<Void> verifyOtp(VerifyOtpRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BadRequestException("Invalid or expired OTP"));
@@ -203,7 +207,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BadRequestException("Invalid or expired OTP"));
 
-        if (user.getTmpOtp() == null || !user.getTmpOtp().equals(request.getOtp())) {
+        if (user.getTmpOtp() == null) {
             throw new BadRequestException("Invalid or expired OTP");
         }
 
@@ -215,6 +219,24 @@ public class AuthServiceImpl implements AuthService {
             user.setOtpCreatedAt(null);
             userRepository.save(user);
             throw new BadRequestException("OTP has expired. Please request a new one.");
+        }
+
+        // Enforce the shared attempt counter. This endpoint used to skip both the
+        // attempt limit and the increment, so a 6-digit OTP was brute-forceable by
+        // calling /reset-password directly (verify-otp's limit never applied).
+        int attempts = user.getOtpAttempts() != null ? user.getOtpAttempts() : 0;
+        if (attempts >= OTP_MAX_ATTEMPTS) {
+            user.setTmpOtp(null);
+            user.setOtpAttempts(0);
+            user.setOtpCreatedAt(null);
+            userRepository.save(user);
+            throw new BadRequestException("Too many failed attempts. Please request a new OTP.");
+        }
+
+        if (!user.getTmpOtp().equals(request.getOtp())) {
+            user.setOtpAttempts(attempts + 1);
+            userRepository.save(user);
+            throw new BadRequestException("Invalid or expired OTP");
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
