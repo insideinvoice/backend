@@ -37,7 +37,7 @@ public class SecurityConfig {
      * companion control, never an authorization mechanism - server-side ownership checks
      * remain the actual protection for invoice data.
      */
-    @Value("${app.cors.allowed-origins:https://insideinvoice.in,https://www.insideinvoice.in,https://insideinvoice.netlify.app,http://localhost:5173,http://localhost:4173}")
+    @Value("${app.cors.allowed-origins:https://insideinvoice.com,https://www.insideinvoice.com,https://insideinvoice.in,https://www.insideinvoice.in,https://insideinvoice.netlify.app,http://localhost:5173,http://localhost:4173}")
     private List<String> allowedOrigins;
 
     @Bean
