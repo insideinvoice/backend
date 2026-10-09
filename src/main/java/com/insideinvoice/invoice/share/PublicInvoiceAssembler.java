@@ -4,6 +4,7 @@ import com.insideinvoice.business.entity.Business;
 import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.entity.InvoiceItem;
+import com.insideinvoice.invoice.entity.InvoiceType;
 import com.insideinvoice.invoice.share.dto.PublicInvoiceResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,11 +22,21 @@ public class PublicInvoiceAssembler {
     private static final ObjectMapper OM = new ObjectMapper();
 
     public PublicInvoiceResponse assemble(ResolvedPublicInvoice resolved) {
+        return assemble(resolved, null);
+    }
+
+    /**
+     * @param typeOverride {@code TAX_INVOICE} / {@code PROFORMA_INVOICE} to render the
+     *                     other document for the same invoice, or {@code null} to use the
+     *                     stored type. Unknown values are ignored rather than trusted, so
+     *                     a bad query parameter can never reach the template lookup.
+     */
+    public PublicInvoiceResponse assemble(ResolvedPublicInvoice resolved, String typeOverride) {
         Invoice invoice = resolved.getInvoice();
         Business business = resolved.getBusiness();
         Customer customer = resolved.getCustomer();
 
-        String invoiceTypeName = invoice.getInvoiceType() != null ? invoice.getInvoiceType().name() : null;
+        String invoiceTypeName = effectiveTypeName(invoice, typeOverride);
 
         return PublicInvoiceResponse.builder()
                 .invoiceNumber(invoice.getInvoiceNumber())
@@ -56,6 +67,15 @@ public class PublicInvoiceAssembler {
                 .buyer(buyer(customer))
                 .items(items(invoice))
                 .build();
+    }
+
+    /** The type the document is rendered as: the validated override, else the stored one. */
+    static String effectiveTypeName(Invoice invoice, String typeOverride) {
+        if (InvoiceType.TAX_INVOICE.name().equals(typeOverride)
+                || InvoiceType.PROFORMA_INVOICE.name().equals(typeOverride)) {
+            return typeOverride;
+        }
+        return invoice.getInvoiceType() != null ? invoice.getInvoiceType().name() : null;
     }
 
     private String resolveTemplate(Business b, String invoiceTypeName) {

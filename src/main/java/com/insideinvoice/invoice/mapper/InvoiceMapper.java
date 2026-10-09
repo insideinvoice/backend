@@ -84,15 +84,26 @@ public class InvoiceMapper {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal taxAmount = invoice.getItems().stream()
-                .map(InvoiceItem::getTaxAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
-
         BigDecimal pct = invoice.getDiscountPercent() != null ? invoice.getDiscountPercent() : BigDecimal.ZERO;
         pct = pct.max(BigDecimal.ZERO).min(BigDecimal.valueOf(100));
         BigDecimal discountAmount = subtotal.multiply(pct).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-        BigDecimal grandTotal = subtotal.subtract(discountAmount).add(taxAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal taxableAmount = subtotal.subtract(discountAmount).setScale(2, RoundingMode.HALF_UP);
+
+        // GST must be computed on the discounted taxable value, not the full
+        // amount — otherwise a discounted invoice shows a higher tax than due.
+        BigDecimal ratio = subtotal.compareTo(BigDecimal.ZERO) > 0
+                ? taxableAmount.divide(subtotal, 10, RoundingMode.HALF_UP)
+                : BigDecimal.ONE;
+
+        BigDecimal taxAmount = invoice.getItems().stream()
+                .map(item -> item.getTaxableValue()
+                        .multiply(ratio)
+                        .multiply(item.getGstPercentage())
+                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP))
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal grandTotal = taxableAmount.add(taxAmount).setScale(2, RoundingMode.HALF_UP);
 
         invoice.setSubtotal(subtotal);
         invoice.setTaxAmount(taxAmount);

@@ -1,11 +1,13 @@
 package com.insideinvoice.invoice.share;
 
+import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
 import com.insideinvoice.business.entity.Business;
 import com.insideinvoice.business.repository.BusinessRepository;
 import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.customer.repository.CustomerRepository;
 import com.insideinvoice.invoice.entity.Invoice;
+import com.insideinvoice.invoice.entity.InvoiceType;
 import com.insideinvoice.invoice.repository.InvoiceRepository;
 import com.insideinvoice.invoice.share.dto.PublicInvoiceResponse;
 import lombok.RequiredArgsConstructor;
@@ -55,7 +57,38 @@ public class PublicInvoiceService {
 
     @Transactional(readOnly = true)
     public PublicInvoiceResponse getPublicInvoice(String token) {
-        return assembler.assemble(resolve(token));
+        return getPublicInvoice(token, null);
+    }
+
+    /**
+     * @param typeOverride optional presentation override: {@code TAX_INVOICE} or
+     *                     {@code PROFORMA_INVOICE}. The share token still decides WHICH
+     *                     invoice resolves; this only decides which of the two documents
+     *                     is rendered from it. {@code null} = the stored invoice type.
+     */
+    @Transactional(readOnly = true)
+    public PublicInvoiceResponse getPublicInvoice(String token, String typeOverride) {
+        // Normalise first so a bad ?type= behaves identically on both public endpoints.
+        String effectiveType = normalizeType(typeOverride);
+        return assembler.assemble(resolve(token), effectiveType);
+    }
+
+    /**
+     * Canonicalises the optional {@code ?type=} query parameter. Blank means "use the
+     * stored type"; the two enum names are the only accepted values, so a typo can never
+     * silently render the wrong document.
+     *
+     * @throws com.insideinvoice.exception.BadRequestException for any other value
+     */
+    public static String normalizeType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String value = raw.trim().toUpperCase(java.util.Locale.ROOT);
+        if (value.equals(InvoiceType.TAX_INVOICE.name()) || value.equals(InvoiceType.PROFORMA_INVOICE.name())) {
+            return value;
+        }
+        throw new BadRequestException("Invalid invoice type. Use TAX_INVOICE or PROFORMA_INVOICE.");
     }
 
     static ResourceNotFoundException notFound() {

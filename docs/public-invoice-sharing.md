@@ -33,6 +33,19 @@ local server. Not yet deployed — deployment requires explicit authorization.
 | `GET /api/public/invoices/{token}` | Allowlisted JSON (see §3). |
 | `GET /api/public/invoices/{token}/pdf` | On-demand server-rendered A4 PDF, `application/pdf`, `Content-Disposition: inline`. |
 
+Both endpoints accept an optional **`?type=` document override** — `TAX_INVOICE` or
+`PROFORMA_INVOICE`. One token therefore renders two documents: the same share link can be
+sent as a proforma without minting a second token or creating a second invoice record
+(no migration, no extra row). The override only changes presentation (document title/label
+in the JSON and on the PDF); amounts, line items, buyer/seller, template lookups and every
+ownership/revocation check are identical either way.
+
+- Case-insensitive, trimmed (`?type=proforma_invoice` is accepted).
+- Omitted or blank → the invoice's stored `invoice_type`.
+- Any other value → `400` `"Invalid invoice type. Use TAX_INVOICE or PROFORMA_INVOICE."`
+  (a typo can never silently render the wrong document); the frontend ignores unknown
+  query values before calling the API, so a mangled URL still renders the stored type.
+
 - Every request (detail and PDF) re-validates the token against the database; the browser
   page is never trusted.
 - Invalid, malformed, unknown and revoked tokens all return the byte-identical message
@@ -70,6 +83,14 @@ local server. Not yet deployed — deployment requires explicit authorization.
 - `InvoiceView`: Share Link panel — Create (also copies), Copy, New (regenerate), Revoke.
   Invoices are unshared by default; sharing only happens on explicit user action.
 - `InvoicesList`: per-row "copy share link" action (idempotent create + copy).
+- Share sheets (InvoiceView + InvoicesList): "Share Proforma Invoice" sends the *existing*
+  share URL as `<origin>/i/<token>?type=PROFORMA_INVOICE` — OS share sheet where the browser
+  has one (mobile → WhatsApp, mail, notes…), clipboard fallback otherwise (cancel never
+  copies). The "Download PDF" / "Share PDF" rows were removed from the sheets; PDF is still
+  one tap away from the toolbar and the row actions.
+- `PublicInvoicePage` reads `?type=` (`useSearchParams`), only forwards the two valid values
+  to `publicInvoiceAPI.getByToken(…, type)` / `pdfUrl(…, type)`, and renders the returned
+  `invoiceType` — so a mangled link still shows the invoice.
 - WhatsApp message gains a `View invoice online: <url>` line only when a link is active.
 - `<meta name="referrer" content="no-referrer">` in `index.html`.
 - `src/config/api.js` now reads `VITE_API_BASE_URL`; committed `.env.production` pins the
@@ -191,3 +212,9 @@ business branding, GST breakup, amount in words), configured-origin fallback, re
 recreation, 400 (no customer email, invalid origin — with no link minted), 404 cross-tenant,
 401 anonymous, blank-key 503, From-name sanitisation, Indian amount grouping, CGST/SGST vs
 IGST selection, and HTML-escaping of user-supplied names.
+
+The `?type=` document override has standalone unit coverage (no database needed) in
+`PublicInvoiceTypeOverrideTest`: `mvn -o test -Dtest=PublicInvoiceTypeOverrideTest` —
+blank falls back to the stored type, accepted values are canonicalised case-insensitively,
+anything else is a 400, and the assembler prefers the validated override while never
+trusting an unvalidated one (the stored row is untouched).

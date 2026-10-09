@@ -11,14 +11,17 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 
 /**
- * Anonymous endpoints behind unguessable share tokens. No parameter other than the
- * token influences the result, and every request (including PDF generation) re-validates
- * the token independently - the browser page is never trusted.
+ * Anonymous endpoints behind unguessable share tokens. Apart from the token, the only
+ * input is the optional {@code ?type=} presentation override (TAX_INVOICE /
+ * PROFORMA_INVOICE) that selects which of the two documents is rendered from the SAME
+ * invoice - it never selects a different invoice. Every request (including PDF
+ * generation) re-validates the token independently - the browser page is never trusted.
  */
 @RestController
 @RequestMapping("/api/public/invoices")
@@ -30,17 +33,22 @@ public class PublicInvoiceController {
     private final PublicInvoicePdfService publicInvoicePdfService;
 
     @GetMapping("/{token}")
-    @Operation(summary = "Public invoice details by share token")
-    public ResponseEntity<ApiResponse<PublicInvoiceResponse>> getInvoice(@PathVariable String token) {
-        PublicInvoiceResponse invoice = publicInvoiceService.getPublicInvoice(token);
+    @Operation(summary = "Public invoice details by share token (optional ?type= document override)")
+    public ResponseEntity<ApiResponse<PublicInvoiceResponse>> getInvoice(
+            @PathVariable String token,
+            @RequestParam(name = "type", required = false) String type) {
+        PublicInvoiceResponse invoice = publicInvoiceService.getPublicInvoice(token, type);
         return ResponseEntity.ok(ApiResponse.success("Invoice retrieved successfully", invoice));
     }
 
     @GetMapping("/{token}/pdf")
-    @Operation(summary = "On-demand PDF for a public share token")
-    public ResponseEntity<byte[]> getPdf(@PathVariable String token) throws IOException {
+    @Operation(summary = "On-demand PDF for a public share token (optional ?type= document override)")
+    public ResponseEntity<byte[]> getPdf(
+            @PathVariable String token,
+            @RequestParam(name = "type", required = false) String type) throws IOException {
+        String effectiveType = PublicInvoiceService.normalizeType(type);
         ResolvedPublicInvoice resolved = publicInvoiceService.resolve(token);
-        byte[] pdf = publicInvoicePdfService.render(resolved);
+        byte[] pdf = publicInvoicePdfService.render(resolved, effectiveType);
         String filename = safeFilename(resolved.getInvoice().getInvoiceNumber());
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)

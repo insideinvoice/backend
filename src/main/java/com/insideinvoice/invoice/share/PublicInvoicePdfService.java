@@ -4,6 +4,7 @@ import com.insideinvoice.business.entity.Business;
 import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.entity.InvoiceItem;
+import com.insideinvoice.invoice.entity.InvoiceType;
 import com.insideinvoice.labels.renderer.PdfCanvas;
 import org.springframework.stereotype.Service;
 
@@ -38,18 +39,28 @@ public class PublicInvoicePdfService {
     private static final Locale LOCALE_IN = Locale.forLanguageTag("en-IN");
 
     public byte[] render(ResolvedPublicInvoice resolved) throws IOException {
+        return render(resolved, null);
+    }
+
+    /**
+     * @param typeOverride {@code TAX_INVOICE} / {@code PROFORMA_INVOICE} to draw the other
+     *                     document for the same invoice, or {@code null} for the stored type.
+     */
+    public byte[] render(ResolvedPublicInvoice resolved, String typeOverride) throws IOException {
         Invoice invoice = resolved.getInvoice();
         Business business = resolved.getBusiness();
         Customer customer = resolved.getCustomer();
+        String effectiveType = PublicInvoiceAssembler.effectiveTypeName(invoice, typeOverride);
+        boolean proforma = InvoiceType.PROFORMA_INVOICE.name().equals(effectiveType);
 
         try (PdfCanvas c = new PdfCanvas(300)) {
             org.apache.pdfbox.pdmodel.PDDocumentInformation meta =
                     c.document().getDocumentInformation();
-            meta.setTitle("Invoice " + invoice.getInvoiceNumber());
+            meta.setTitle((proforma ? "Proforma Invoice " : "Invoice ") + invoice.getInvoiceNumber());
             meta.setAuthor(business != null ? business.getBusinessName() : "Inside Invoice");
             startPage(c, null);
 
-            double y = drawTitle(c, invoice);
+            double y = drawTitle(c, proforma);
             y = drawSellerAndMeta(c, invoice, business, y);
             y = drawBuyer(c, customer, y);
             y = drawItemsTable(c, invoice, y);
@@ -79,9 +90,8 @@ public class PublicInvoicePdfService {
 
     // ------------------------------------------------------------------ blocks
 
-    private double drawTitle(PdfCanvas c, Invoice invoice) throws IOException {
-        String title = invoice.getInvoiceType() != null && invoice.getInvoiceType().name().equals("PROFORMA_INVOICE")
-                ? "PROFORMA INVOICE" : "TAX INVOICE";
+    private double drawTitle(PdfCanvas c, boolean proforma) throws IOException {
+        String title = proforma ? "PROFORMA INVOICE" : "TAX INVOICE";
         c.fillRgb(240, 244, 248);
         c.fillRect(M, 10, CONTENT_W, 11);
         c.strokeRgb(30, 41, 59);
