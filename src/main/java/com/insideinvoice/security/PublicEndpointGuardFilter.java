@@ -49,6 +49,17 @@ public class PublicEndpointGuardFilter extends OncePerRequestFilter {
     private static final int MAX_IP_KEYS = 10_000;
     private static final int MAX_TOKEN_KEYS = 20_000;
 
+    /**
+     * Anonymous endpoints that are expensive (bcrypt, DB write, and/or a synchronous
+     * outbound email that can pin a Tomcat thread for up to 30 s). Throttled per IP so
+     * a flood cannot exhaust the connection pool / worker threads or brute-force auth.
+     */
+    private static boolean isSensitivePath(String path) {
+        return path.startsWith("/api/auth/")
+                || path.startsWith("/api/contact")
+                || path.startsWith("/api/email/");
+    }
+
     private final ObjectMapper objectMapper;
 
     @Value("${app.public.rate-limit.requests-per-minute-per-ip:120}")
@@ -57,39 +68,58 @@ public class PublicEndpointGuardFilter extends OncePerRequestFilter {
     @Value("${app.public.rate-limit.requests-per-minute-per-token:60}")
     private int tokenPerMinute;
 
+    @Value("${app.security.sensitive-rate-limit.requests-per-minute-per-ip:20}")
+    private int sensitivePerMinute;
+
     @Value("${app.security.trust-forwarded-for:true}")
     private boolean trustForwardedFor;
 
     private final Map<String, Window> ipWindows = new ConcurrentHashMap<>();
     private final Map<String, Window> tokenWindows = new ConcurrentHashMap<>();
+    private final Map<String, Window> sensitiveWindows = new ConcurrentHashMap<>();
     private final AtomicLong lastSweep = new AtomicLong(System.currentTimeMillis());
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String path = request.getRequestURI();
-        if (!path.startsWith(PUBLIC_PREFIX)) {
+        boolean isPublic = path.startsWith(PUBLIC_PREFIX);
+        boolean isSensitive = isSensitivePath(path);
+        if (!isPublic && !isSensitive) {
             chain.doFilter(request, response);
             return;
         }
 
         // Applied before anything else so rate-limited (429), not-found (404) and success
         // responses all carry the same privacy headers.
-        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
-        response.setHeader("Pragma", "no-cache");
-        response.setHeader("Referrer-Policy", "no-referrer");
-        response.setHeader("X-Content-Type-Options", "nosniff");
-
-        String clientIp = clientIp(request);
-        if (!allow(ipWindows, "ip:" + clientIp, ipPerMinute, MAX_IP_KEYS)) {
-            reject(response, "Too many requests. Please try again later.");
-            return;
+        if (isPublic) {
+            response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+            response.setHeader("Pragma", "no-cache");
+            response.setHeader("Referrer-Policy", "no-referrer");
+            response.setHeader("X-Content-Type-Options", "nosniff");
         }
 
-        String token = pathToken(path);
-        if (token != null && !allow(tokenWindows, "tk:" + token, tokenPerMinute, MAX_TOKEN_KEYS)) {
-            reject(response, "Too many requests. Please try again later.");
-            return;
+        String clientIp = clientIp(request);
+
+        if (isPublic) {
+            if (!allow(ipWindows, "ip:" + clientIp, ipPerMinute, MAX_IP_KEYS)) {
+                reject(response, "Too many requests. Please try again later.");
+                return;
+            }
+            String token = pathToken(path);
+            if (token != null && !allow(tokenWindows, "tk:" + token, tokenPerMinute, MAX_TOKEN_KEYS)) {
+                reject(response, "Too many requests. Please try again later.");
+                return;
+            }
+        }
+
+        if (isSensitive) {
+            // Stricter, separate budget: these endpoints cost a thread for bcrypt and,
+            // for forgot-password/contact/email, an outbound HTTP call.
+            if (!allow(sensitiveWindows, "s-ip:" + clientIp, sensitivePerMinute, MAX_IP_KEYS)) {
+                reject(response, "Too many requests. Please try again later.");
+                return;
+            }
         }
 
         chain.doFilter(request, response);

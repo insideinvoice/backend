@@ -98,9 +98,8 @@ public class DeliveryChallanServiceImpl implements DeliveryChallanService {
     @Transactional(readOnly = true)
     public PagedResponse<DeliveryChallanResponse> getAllDeliveryChallans(Long businessId, int page, int size,
             String sortBy, String sortDir) {
-        Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
-                ? Sort.by(sortBy).ascending()
-                : Sort.by(sortBy).descending();
+        Sort sort = com.insideinvoice.common.PageParams.safeSort(sortBy, sortDir,
+                java.util.Set.of("createdAt", "challanDate", "challanNumber", "status"), "createdAt");
         Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, sort);
         Page<DeliveryChallan> challans = deliveryChallanRepository.findByBusinessId(businessId, pageable);
         List<DeliveryChallan> content = challans.getContent();

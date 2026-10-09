@@ -91,9 +91,9 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional(readOnly = true)
     public PagedResponse<InvoiceResponse> getAllInvoices(Long businessId, int page, int size, String sortBy, String sortDir) {
-        Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
-                ? Sort.by(sortBy).ascending()
-                : Sort.by(sortBy).descending();
+        Sort sort = com.insideinvoice.common.PageParams.safeSort(sortBy, sortDir,
+                java.util.Set.of("createdAt", "invoiceDate", "dueDate", "grandTotal", "invoiceNumber", "status"),
+                "createdAt");
         Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, sort);
         Page<Invoice> invoices = invoiceRepository.findByBusinessId(businessId, pageable);
         List<Invoice> content = invoices.getContent();
@@ -217,7 +217,9 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional
     public InvoiceResponse updateInvoice(Long id, UpdateInvoiceRequest request, Long businessId) {
-        Invoice invoice = invoiceRepository.findByIdAndBusinessId(id, businessId)
+        // FOR UPDATE: serializes with createPayment (which locks the same row), so a
+        // concurrent payment can't have its status/totals overwritten by a stale edit.
+        Invoice invoice = invoiceRepository.findByIdAndBusinessIdForUpdate(id, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
 
         Customer customer = customerRepository.findByIdAndBusinessId(request.getCustomerId(), businessId)

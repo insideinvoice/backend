@@ -77,9 +77,8 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional(readOnly = true)
     public PagedResponse<CustomerResponse> getAllCustomers(Long businessId, int page, int size, String sortBy, String sortDir) {
-        Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
-                ? Sort.by(sortBy).ascending()
-                : Sort.by(sortBy).descending();
+        Sort sort = com.insideinvoice.common.PageParams.safeSort(sortBy, sortDir,
+                java.util.Set.of("createdAt", "name", "email", "phone", "city", "state"), "createdAt");
         Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, sort);
         Page<Customer> customers = customerRepository.findByBusinessId(businessId, pageable);
 

@@ -39,6 +39,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.ByteArrayOutputStream;
 import java.time.OffsetDateTime;
@@ -51,11 +52,15 @@ public class HazmatLabelServiceImpl implements HazmatLabelService {
 
     private static final Logger log = LoggerFactory.getLogger(HazmatLabelServiceImpl.class);
 
+    /** Hard cap on merged labels per bulk-PDF request — bounds heap + request time. */
+    private static final int MAX_BULK_PDF = 100;
+
     private final HazmatLabelRepository hazmatLabelRepository;
     private final LabelFileRepository labelFileRepository;
     private final LabelAuditRepository labelAuditRepository;
     private final UnNumberReferenceRepository unNumberReferenceRepository;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate transactionTemplate;
 
     // ---------------------------------------------------------------- create
 
@@ -208,55 +213,61 @@ public class HazmatLabelServiceImpl implements HazmatLabelService {
     // ---------------------------------------------------------------- pdf
 
     @Override
-    @Transactional
     public byte[] generatePdf(Long id, Long businessId, Long userId, String ip) throws Exception {
-        HazmatLabel e = getEntity(id, businessId);
-        HazmatSpec spec = specFrom(e);
+        // 1. Short read tx: ownership check + build the render spec (detached POJO).
+        HazmatSpec spec = transactionTemplate.execute(status -> specFrom(getEntity(id, businessId)));
+
+        // 2. Render OUTSIDE any transaction (CPU-heavy; must not pin a DB connection).
         byte[] pdf = HazmatRenderers.forSpec(spec).render(spec);
         String sha = Hashing.sha256Hex(pdf);
-        LabelFile file = labelFileRepository.findByLabelIdAndLabelType(id, LabelKind.HAZMAT).orElse(null);
-        if (file == null) {
-            file = LabelFile.builder()
-                    .labelId(id)
-                    .labelType(LabelKind.HAZMAT)
-                    .build();
-        }
-        file.setPdfBytes(pdf);
-        file.setPdfSha256(sha);
-        file.setCreatedAt(OffsetDateTime.now());
-        file.setUpdatedAt(OffsetDateTime.now());
-        labelFileRepository.save(file);
-        e.setPdfSha256(sha);
-        e.setStatus(LabelStatus.GENERATED);
-        audit(businessId, id, LabelAuditAction.REGENERATED, userId, ip);
+
+        // 3. Short write tx: persist the blob + status + audit row.
+        transactionTemplate.executeWithoutResult(status -> {
+            HazmatLabel e = getEntity(id, businessId); // re-fetch: prior tx detached it
+            LabelFile file = labelFileRepository.findByLabelIdAndLabelType(id, LabelKind.HAZMAT).orElse(null);
+            if (file == null) {
+                file = LabelFile.builder()
+                        .labelId(id)
+                        .labelType(LabelKind.HAZMAT)
+                        .build();
+            }
+            file.setPdfBytes(pdf);
+            file.setPdfSha256(sha);
+            file.setCreatedAt(OffsetDateTime.now());
+            file.setUpdatedAt(OffsetDateTime.now());
+            labelFileRepository.save(file);
+            e.setPdfSha256(sha);
+            e.setStatus(LabelStatus.GENERATED);
+            audit(businessId, id, LabelAuditAction.REGENERATED, userId, ip);
+        });
         return pdf;
     }
 
     @Override
-    @Transactional
     public byte[] getPdf(Long id, Long businessId) throws Exception {
-        // Ownership check first: label_files has no businessId column, so serving the
-        // cached blob before getEntity() would leak another tenant's PDF (IDOR).
-        getEntity(id, businessId);
-        LabelFile file = labelFileRepository.findByLabelIdAndLabelType(id, LabelKind.HAZMAT).orElse(null);
-        if (file != null) {
-            return file.getPdfBytes();
+        // Ownership check + cached-blob read in a short tx. label_files has no
+        // businessId column, so getEntity() must run first to prevent cross-tenant leaks.
+        byte[] cached = transactionTemplate.execute(status -> {
+            getEntity(id, businessId);
+            LabelFile file = labelFileRepository.findByLabelIdAndLabelType(id, LabelKind.HAZMAT).orElse(null);
+            return file != null ? file.getPdfBytes() : null;
+        });
+        if (cached != null) {
+            return cached;
         }
         return generatePdf(id, businessId, null, null);
     }
 
     @Override
-    @Transactional
     public byte[] bulkPdf(List<Long> ids, Long businessId, Long userId, String ip) throws Exception {
         if (ids == null || ids.isEmpty()) {
             throw new BadRequestException("At least one label id is required");
         }
+        List<Long> capped = ids.size() > MAX_BULK_PDF ? ids.subList(0, MAX_BULK_PDF) : ids;
         try (PDDocument out = new PDDocument()) {
-            for (Long id : ids) {
-                // Same IDOR guard as getPdf: resolve ownership before serving cached bytes.
-                getEntity(id, businessId);
-                LabelFile file = labelFileRepository.findByLabelIdAndLabelType(id, LabelKind.HAZMAT).orElse(null);
-                byte[] pdf = file != null ? file.getPdfBytes() : generatePdf(id, businessId, userId, ip);
+            for (Long id : capped) {
+                // getPdf keeps each iteration's DB work in a short tx and renders outside it.
+                byte[] pdf = getPdf(id, businessId);
                 try (PDDocument in = Loader.loadPDF(pdf)) {
                     for (int p = 0; p < in.getNumberOfPages(); p++) {
                         out.importPage(in.getPage(p));

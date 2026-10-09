@@ -44,9 +44,8 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public PagedResponse<ProductResponse> getAllProducts(Long businessId, int page, int size, String sortBy, String sortDir) {
-        Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
-                ? Sort.by(sortBy).ascending()
-                : Sort.by(sortBy).descending();
+        Sort sort = com.insideinvoice.common.PageParams.safeSort(sortBy, sortDir,
+                java.util.Set.of("createdAt", "name", "rate", "hsn", "unit"), "createdAt");
         Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, sort);
         Page<Product> products = productRepository.findByBusinessId(businessId, pageable);
 

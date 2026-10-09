@@ -1,6 +1,7 @@
 package com.insideinvoice.payment.service.impl;
 
 import com.insideinvoice.common.dto.PagedResponse;
+import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.customer.repository.CustomerRepository;
 import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
@@ -101,9 +102,8 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional(readOnly = true)
     public PagedResponse<PaymentResponse> getAllPayments(Long businessId, int page, int size, String sortBy, String sortDir) {
-        Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
-                ? Sort.by(sortBy).ascending()
-                : Sort.by(sortBy).descending();
+        Sort sort = com.insideinvoice.common.PageParams.safeSort(sortBy, sortDir,
+                java.util.Set.of("createdAt", "amount", "paymentDate", "paymentMode"), "createdAt");
         Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, sort);
         Page<Payment> payments = paymentRepository.findByBusinessId(businessId, pageable);
 
@@ -119,11 +119,25 @@ public class PaymentServiceImpl implements PaymentService {
                 : invoiceRepository.findAllById(invoiceIds).stream()
                         .collect(java.util.stream.Collectors.toMap(Invoice::getId, java.util.function.Function.identity(), (a, b) -> a));
 
+        // Batch-load customer names for the page's invoices in ONE query (avoids a
+        // customer findById per payment inside toResponse).
+        java.util.Set<Long> customerIds = invoicesById.values().stream()
+                .map(Invoice::getCustomerId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        java.util.Map<Long, String> customerNames = customerIds.isEmpty()
+                ? java.util.Map.of()
+                : customerRepository.findByIdInAndBusinessId(customerIds, businessId).stream()
+                        .collect(java.util.stream.Collectors.toMap(Customer::getId, Customer::getName, (a, b) -> a));
+
         return PagedResponse.<PaymentResponse>builder()
                 .content(payments.getContent().stream()
                         .map(payment -> {
                             Invoice invoice = invoicesById.get(payment.getInvoiceId());
-                            return toResponse(payment, invoice);
+                            String name = invoice == null
+                                    ? "Unknown"
+                                    : customerNames.getOrDefault(invoice.getCustomerId(), "Unknown");
+                            return toResponse(payment, invoice, name);
                         })
                         .toList())
                 .page(payments.getNumber())
@@ -163,8 +177,10 @@ public class PaymentServiceImpl implements PaymentService {
         paymentRepository.delete(payment);
 
         // Keep invoice status truthful: a PAID invoice whose only payment was deleted
-        // used to stay PAID forever, drifting balance/reporting.
-        invoiceRepository.findById(payment.getInvoiceId()).ifPresent(invoice -> {
+        // used to stay PAID forever, drifting balance/reporting. FOR UPDATE serializes
+        // this recompute with concurrent createPayment/updateInvoice (same row lock).
+        invoiceRepository.findByIdAndBusinessIdForUpdate(payment.getInvoiceId(), businessId)
+                .ifPresent(invoice -> {
             if (invoice.getStatus() == InvoiceStatus.PAID || invoice.getStatus() == InvoiceStatus.PENDING) {
                 BigDecimal totalPaid = paymentRepository.findByInvoiceId(invoice.getId()).stream()
                         .map(Payment::getAmount)
@@ -188,16 +204,19 @@ public class PaymentServiceImpl implements PaymentService {
         String customerName = "Unknown";
         if (invoice != null) {
             customerName = customerRepository.findById(invoice.getCustomerId())
-                    .map(c -> c.getName())
+                    .map(Customer::getName)
                     .orElse("Unknown");
         }
+        return toResponse(payment, invoice, customerName);
+    }
 
+    private PaymentResponse toResponse(Payment payment, Invoice invoice, String customerName) {
         return PaymentResponse.builder()
                 .id(payment.getId())
                 .businessId(payment.getBusinessId())
                 .invoiceId(payment.getInvoiceId())
                 .invoiceNumber(invoice != null ? invoice.getInvoiceNumber() : null)
-                .customerName(customerName)
+                .customerName(customerName != null ? customerName : "Unknown")
                 .amount(payment.getAmount())
                 .paymentMode(payment.getPaymentMode())
                 .referenceNo(payment.getReferenceNo())
