@@ -75,7 +75,7 @@ app:
   mail:
     resend-api-key: cmVfTW13bkNIZ0NfR3RZenVQNWk4aHVWaWM2N2gxN3hlSmdW
     from: noreply@insideinvoice.com
-    logo-url: https://your-public-logo-url
+    logo-url: ""   # optional public URL of the seller logo shown in invoice emails (max 40px high; blank = text-only header)
     contact-email: insideinvoice87@gmail.com
   jwt:
     secret: NGE2ZjY4NmU0NDZmNjU1MzY1NjM3MjY1NzQ1NjY1NzI3OTU2NjU3Mjc5NTM2NTYzNzI2NTc0NGI2NTc5NDY2ZjcyNGE1NzU0NTM2OTY3NmU2OTZlNjc0MTZlNjQ0NTZlNjM3Mjc5NzA3NDY5NmY2ZQ==
