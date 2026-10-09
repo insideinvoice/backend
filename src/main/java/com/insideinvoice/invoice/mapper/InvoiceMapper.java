@@ -111,7 +111,16 @@ public class InvoiceMapper {
     }
 
     public InvoiceResponse toResponse(Invoice invoice, String customerName) {
-        List<InvoiceItemResponse> itemResponses = invoice.getItems().stream()
+        return toResponse(invoice, customerName, invoice.getItems());
+    }
+
+    /**
+     * Maps an invoice using an already-loaded item list. The list screen batch-loads
+     * items for the whole page in one query and passes them here, so the lazy
+     * collection is never touched (no N+1).
+     */
+    public InvoiceResponse toResponse(Invoice invoice, String customerName, List<InvoiceItem> items) {
+        List<InvoiceItemResponse> itemResponses = items.stream()
                 .map(this::toItemResponse)
                 .toList();
 

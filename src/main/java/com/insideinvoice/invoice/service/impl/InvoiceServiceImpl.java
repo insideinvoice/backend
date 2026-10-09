@@ -108,11 +108,23 @@ public class InvoiceServiceImpl implements InvoiceService {
                 : customerRepository.findByIdInAndBusinessId(customerIds, businessId).stream()
                         .collect(java.util.stream.Collectors.toMap(Customer::getId, Customer::getName, (a, b) -> a));
 
+        // Batch-load items for the whole page in ONE query instead of letting the
+        // mapper lazily fetch them per invoice (N+1).
+        java.util.List<Long> invoiceIds = content.stream().map(Invoice::getId).toList();
+        java.util.Map<Long, java.util.List<com.insideinvoice.invoice.entity.InvoiceItem>> itemsByInvoice =
+                invoiceIds.isEmpty()
+                        ? java.util.Map.of()
+                        : invoiceItemRepository.findByInvoiceIdIn(invoiceIds).stream()
+                                .collect(java.util.stream.Collectors.groupingBy(
+                                        it -> it.getInvoice().getId()));
+
         return PagedResponse.<InvoiceResponse>builder()
                 .content(content.stream()
                         .map(invoice -> {
                             String customerName = customerNames.getOrDefault(invoice.getCustomerId(), "Unknown");
-                            return invoiceMapper.toResponse(invoice, customerName);
+                            java.util.List<com.insideinvoice.invoice.entity.InvoiceItem> items =
+                                    itemsByInvoice.getOrDefault(invoice.getId(), java.util.List.of());
+                            return invoiceMapper.toResponse(invoice, customerName, items);
                         })
                         .toList())
                 .page(invoices.getNumber())

@@ -10,6 +10,7 @@ import com.insideinvoice.deliverychallan.dto.response.DeliveryChallanItemRespons
 import com.insideinvoice.deliverychallan.dto.response.DeliveryChallanResponse;
 import com.insideinvoice.deliverychallan.entity.DeliveryChallan;
 import com.insideinvoice.deliverychallan.entity.DeliveryChallanItem;
+import com.insideinvoice.deliverychallan.repository.DeliveryChallanItemRepository;
 import com.insideinvoice.deliverychallan.repository.DeliveryChallanRepository;
 import com.insideinvoice.deliverychallan.service.DeliveryChallanService;
 import com.insideinvoice.exception.BadRequestException;
@@ -33,6 +34,7 @@ import java.util.List;
 public class DeliveryChallanServiceImpl implements DeliveryChallanService {
 
     private final DeliveryChallanRepository deliveryChallanRepository;
+    private final DeliveryChallanItemRepository deliveryChallanItemRepository;
     private final CustomerRepository customerRepository;
     private final BusinessRepository businessRepository;
     private static final DateTimeFormatter DC_NUMBER_TS = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
@@ -101,10 +103,31 @@ public class DeliveryChallanServiceImpl implements DeliveryChallanService {
                 : Sort.by(sortBy).descending();
         Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, sort);
         Page<DeliveryChallan> challans = deliveryChallanRepository.findByBusinessId(businessId, pageable);
+        List<DeliveryChallan> content = challans.getContent();
+
+        // Batch-load customers and items for the whole page in ONE query each,
+        // instead of a lookup per challan (N+1 on both).
+        java.util.Set<Long> customerIds = content.stream()
+                .map(DeliveryChallan::getCustomerId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        java.util.Map<Long, Customer> customersById = customerIds.isEmpty()
+                ? java.util.Map.of()
+                : customerRepository.findByIdInAndBusinessId(customerIds, businessId).stream()
+                        .collect(java.util.stream.Collectors.toMap(Customer::getId, java.util.function.Function.identity(), (a, b) -> a));
+
+        java.util.List<Long> challanIds = content.stream().map(DeliveryChallan::getId).toList();
+        java.util.Map<Long, List<DeliveryChallanItem>> itemsByChallan = challanIds.isEmpty()
+                ? java.util.Map.of()
+                : deliveryChallanItemRepository.findByChallanIdIn(challanIds).stream()
+                        .collect(java.util.stream.Collectors.groupingBy(it -> it.getChallan().getId()));
 
         return PagedResponse.<DeliveryChallanResponse>builder()
-                .content(challans.getContent().stream()
-                        .map(challan -> toResponse(challan, findCustomer(challan.getCustomerId(), businessId)))
+                .content(content.stream()
+                        .map(challan -> toResponse(
+                                challan,
+                                customersById.get(challan.getCustomerId()),
+                                itemsByChallan.getOrDefault(challan.getId(), List.of())))
                         .toList())
                 .page(challans.getNumber())
                 .size(challans.getSize())
@@ -142,7 +165,12 @@ public class DeliveryChallanServiceImpl implements DeliveryChallanService {
     }
 
     private DeliveryChallanResponse toResponse(DeliveryChallan challan, Customer customer) {
-        List<DeliveryChallanItemResponse> items = challan.getItems().stream()
+        return toResponse(challan, customer, challan.getItems());
+    }
+
+    private DeliveryChallanResponse toResponse(DeliveryChallan challan, Customer customer,
+            List<DeliveryChallanItem> itemsList) {
+        List<DeliveryChallanItemResponse> items = itemsList.stream()
                 .map(item -> DeliveryChallanItemResponse.builder()
                         .id(item.getId())
                         .sno(item.getSno())

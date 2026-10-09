@@ -107,10 +107,22 @@ public class PaymentServiceImpl implements PaymentService {
         Pageable pageable = com.insideinvoice.common.PageParams.of(page, size, sort);
         Page<Payment> payments = paymentRepository.findByBusinessId(businessId, pageable);
 
+        // Batch-load the invoices for the whole page in ONE query (only the invoice
+        // number is needed) instead of one findById per payment (N+1).
+        java.util.List<Long> invoiceIds = payments.getContent().stream()
+                .map(Payment::getInvoiceId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        java.util.Map<Long, Invoice> invoicesById = invoiceIds.isEmpty()
+                ? java.util.Map.of()
+                : invoiceRepository.findAllById(invoiceIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(Invoice::getId, java.util.function.Function.identity(), (a, b) -> a));
+
         return PagedResponse.<PaymentResponse>builder()
                 .content(payments.getContent().stream()
                         .map(payment -> {
-                            Invoice invoice = invoiceRepository.findById(payment.getInvoiceId()).orElse(null);
+                            Invoice invoice = invoicesById.get(payment.getInvoiceId());
                             return toResponse(payment, invoice);
                         })
                         .toList())
