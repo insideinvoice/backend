@@ -26,6 +26,9 @@ public final class FontBundle {
     private static final String DEVANAGARI = "NotoSansDevanagari-Regular.ttf";
     private static final String ARABIC = "NotoSansArabic-Regular.ttf";
 
+    /** Drawn instead of any codepoint no bundled font covers (emoji, exotic symbols). */
+    private static final int PLACEHOLDER = 0x25A1;
+
     private final PDDocument document;
 
     private PDType0Font regular;
@@ -91,7 +94,9 @@ public final class FontBundle {
     /**
      * Splits a string into consecutive runs that each map to a single font.
      * Picks Liberation Regular/Bold for covered codepoints, then Noto Sans,
-     * then script-specific fallbacks.
+     * then script-specific fallbacks. Codepoints covered by none of them
+     * (emoji and other symbols) become U+25A1, so the caller is never handed
+     * a font/glyph combination PDFBox would reject.
      */
     public List<Run> segment(String text, boolean boldRequested) throws IOException {
         List<Run> runs = new ArrayList<>();
@@ -103,7 +108,15 @@ public final class FontBundle {
         int i = 0;
         while (i < text.length()) {
             int cp = text.codePointAt(i);
+            int advance = Character.charCount(cp);
             PDType0Font font = pick(cp, boldRequested);
+            if (font == null) {
+                cp = PLACEHOLDER;
+                font = pick(cp, boldRequested);
+                if (font == null) {
+                    font = regular();
+                }
+            }
             if (font == current) {
                 buf.appendCodePoint(cp);
             } else {
@@ -114,7 +127,7 @@ public final class FontBundle {
                 buf.appendCodePoint(cp);
                 current = font;
             }
-            i += Character.charCount(cp);
+            i += advance;
         }
         if (!buf.isEmpty() && current != null) {
             runs.add(new Run(current, buf.toString()));
@@ -147,7 +160,7 @@ public final class FontBundle {
         if (covers(sans, cp)) {
             return sans;
         }
-        return primary;
+        return null;
     }
 
     /**
