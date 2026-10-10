@@ -9,6 +9,7 @@ import com.insideinvoice.business.dto.response.BusinessResponse;
 import com.insideinvoice.business.entity.Business;
 import com.insideinvoice.business.mapper.BusinessMapper;
 import com.insideinvoice.business.repository.BusinessRepository;
+import com.insideinvoice.business.industry.Industry;
 import com.insideinvoice.business.service.BusinessService;
 import com.insideinvoice.exception.DuplicateResourceException;
 import com.insideinvoice.exception.ResourceNotFoundException;
@@ -90,6 +91,11 @@ public class BusinessServiceImpl implements BusinessService {
         if (request.getUpiId() != null) business.setUpiId(request.getUpiId());
         if (request.getSpecialistIn() != null) business.setSpecialistIn(request.getSpecialistIn());
         if (request.getSpecialistInEnabled() != null) business.setSpecialistInEnabled(request.getSpecialistInEnabled());
+        // Industry is validated by @Pattern on the request; resolve() additionally
+        // normalises case/whitespace. Null = leave unchanged (older clients).
+        if (request.getIndustry() != null) {
+            business.setIndustry(Industry.resolve(request.getIndustry()).getId());
+        }
 
         business = businessRepository.save(business);
         log.info("Business updated: {}", businessId);

@@ -127,6 +127,7 @@ public class PublicInvoiceAssembler {
                 .specialistIn(b.getSpecialistIn())
                 .specialistInEnabled(b.getSpecialistInEnabled())
                 .signature(b.getSignature())
+                .industry(b.getIndustry())
                 .payment(PublicInvoiceResponse.PaymentInstructions.builder()
                         .bankName(b.getBankName())
                         .branch(b.getBranch())

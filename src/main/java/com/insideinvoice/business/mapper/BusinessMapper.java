@@ -2,7 +2,10 @@ package com.insideinvoice.business.mapper;
 
 import com.insideinvoice.business.dto.request.BusinessSetupRequest;
 import com.insideinvoice.business.dto.response.BusinessResponse;
+import com.insideinvoice.business.dto.response.IndustryConfigResponse;
 import com.insideinvoice.business.entity.Business;
+import com.insideinvoice.business.industry.Industry;
+import com.insideinvoice.business.industry.IndustryRegistry;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -30,6 +33,9 @@ public class BusinessMapper {
                 .upiId(request.getUpiId())
                 .specialistIn(request.getSpecialistIn())
                 .specialistInEnabled(Boolean.TRUE.equals(request.getSpecialistInEnabled()))
+                .industry(request.getIndustry() != null
+                        ? Industry.resolve(request.getIndustry()).getId()
+                        : Industry.OTHER.getId())
                 .nextInvoiceSequence(1L)
                 .build();
     }
@@ -62,6 +68,9 @@ public class BusinessMapper {
                 .specialistInEnabled(business.getSpecialistInEnabled())
                 .invoiceTemplate(business.getInvoiceTemplate())
                 .printSettings(business.getPrintSettings())
+                .industry(Industry.resolve(business.getIndustry()).getId())
+                .industryConfig(IndustryConfigResponse.from(
+                        IndustryRegistry.forRawIndustry(business.getIndustry())))
                 .createdAt(business.getCreatedAt())
                 .updatedAt(business.getUpdatedAt())
                 .build();
@@ -86,6 +95,7 @@ public class BusinessMapper {
         if (request.getIfsc() != null) business.setIfsc(request.getIfsc());
         if (request.getBankAddress() != null) business.setBankAddress(request.getBankAddress());
         if (request.getUpiId() != null) business.setUpiId(request.getUpiId());
+        if (request.getIndustry() != null) business.setIndustry(Industry.resolve(request.getIndustry()).getId());
         if (request.getSpecialistIn() != null) business.setSpecialistIn(request.getSpecialistIn());
         if (request.getSpecialistInEnabled() != null) business.setSpecialistInEnabled(request.getSpecialistInEnabled());
     }

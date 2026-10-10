@@ -55,6 +55,14 @@ public class BusinessUpdateRequest {
 
     private String upiId;
 
+    /**
+     * Stable industry profile id. Null means "leave unchanged", so older
+     * clients that never send the field keep working.
+     */
+    @Pattern(regexp = com.insideinvoice.business.industry.Industry.ID_PATTERN,
+            message = "Unknown industry")
+    private String industry;
+
     @Size(max = 500, message = "Specialist in must not exceed 500 characters")
     private String specialistIn;
 

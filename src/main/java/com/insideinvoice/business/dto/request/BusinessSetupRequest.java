@@ -57,6 +57,14 @@ public class BusinessSetupRequest {
 
     private String upiId;
 
+    /**
+     * Stable industry profile id. Optional on setup: a missing value falls back
+     * to OTHER so onboarding can never fail on this field.
+     */
+    @Pattern(regexp = com.insideinvoice.business.industry.Industry.ID_PATTERN,
+            message = "Unknown industry")
+    private String industry;
+
     @Size(max = 500, message = "Specialist in must not exceed 500 characters")
     private String specialistIn;
 
