@@ -38,7 +38,7 @@ public enum Industry {
             "Training centres, tutors and educational service providers."),
     AGRICULTURE("AGRICULTURE", "Agriculture & Primary Goods",
             "Producers and traders of agricultural products and primary goods."),
-    OTHER("OTHER", "Other / General Business",
+    OTHER("OTHER", "General Business",
             "A safe general-purpose configuration that keeps every existing invoice field available.");
 
     /**

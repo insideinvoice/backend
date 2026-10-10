@@ -83,7 +83,8 @@ public final class IndustryRegistry {
                         IndustryField.TERMS_OF_DELIVERY, IndustryField.DESTINATION),
                 Map.of(
                         IndustryField.REFERENCE_NUMBER, "Engagement Ref.",
-                        IndustryField.OTHER_REFERENCES, "Client P.O. / Project Ref."),
+                        IndustryField.OTHER_REFERENCES, "Client P.O. / Project Ref.",
+                        IndustryField.ITEM_NAME, "Description of Services"),
                 Map.of(
                         IndustryField.REFERENCE_NUMBER, "e.g. SOW / engagement reference",
                         IndustryField.OTHER_REFERENCES, "e.g. Client PO or project code"),
@@ -123,7 +124,8 @@ public final class IndustryRegistry {
                 Set.of(IndustryField.DISPATCH_DOC_NUMBER, IndustryField.DISPATCHED_THROUGH),
                 Map.of(
                         IndustryField.OTHER_REFERENCES, "Order / Event Reference",
-                        IndustryField.DELIVERY_NOTE, "Delivery / Order Note"),
+                        IndustryField.DELIVERY_NOTE, "Delivery / Order Note",
+                        IndustryField.ITEM_NAME, "Description of Items"),
                 Map.of(
                         IndustryField.OTHER_REFERENCES, "e.g. Table, order or event ref",
                         IndustryField.DELIVERY_NOTE, "e.g. Delivery or catering order"),
@@ -148,7 +150,8 @@ public final class IndustryRegistry {
                         IndustryField.TERMS_OF_DELIVERY, IndustryField.DESTINATION),
                 Map.of(
                         IndustryField.REFERENCE_NUMBER, "Service / Account Ref.",
-                        IndustryField.OTHER_REFERENCES, "Subscription / Order Ref."),
+                        IndustryField.OTHER_REFERENCES, "Subscription / Order Ref.",
+                        IndustryField.ITEM_NAME, "Description of Services"),
                 Map.of(
                         IndustryField.REFERENCE_NUMBER, "e.g. Account or service ID",
                         IndustryField.OTHER_REFERENCES, "e.g. Subscription or order number"),
@@ -162,7 +165,8 @@ public final class IndustryRegistry {
                         IndustryField.TERMS_OF_DELIVERY, IndustryField.DESTINATION),
                 Map.of(
                         IndustryField.REFERENCE_NUMBER, "Visit / Case Ref.",
-                        IndustryField.OTHER_REFERENCES, "Appointment / Order Ref."),
+                        IndustryField.OTHER_REFERENCES, "Appointment / Order Ref.",
+                        IndustryField.ITEM_NAME, "Description of Services"),
                 Map.of(
                         IndustryField.REFERENCE_NUMBER, "e.g. Visit or case reference",
                         IndustryField.OTHER_REFERENCES, "e.g. Appointment or order number"),
@@ -175,7 +179,8 @@ public final class IndustryRegistry {
                         IndustryField.TERMS_OF_DELIVERY, IndustryField.DESTINATION),
                 Map.of(
                         IndustryField.REFERENCE_NUMBER, "Course / Batch Ref.",
-                        IndustryField.OTHER_REFERENCES, "Enrolment / P.O. Reference"),
+                        IndustryField.OTHER_REFERENCES, "Enrolment / P.O. Reference",
+                        IndustryField.ITEM_NAME, "Description of Services"),
                 Map.of(
                         IndustryField.REFERENCE_NUMBER, "e.g. Course or batch code",
                         IndustryField.OTHER_REFERENCES, "e.g. Enrolment ID or client PO"),
@@ -192,7 +197,7 @@ public final class IndustryRegistry {
                         IndustryField.DELIVERY_NOTE, "e.g. Consignment / lot note"),
                 DocumentAccess.of(true, true, true)));
 
-        // --- Other / General Business ----------------------------------------
+        // --- General Business -----------------------------------------------
         // Backward-compatible baseline: nothing hidden, every document enabled.
         register(IndustryConfig.of(Industry.OTHER,
                 Set.of(),
