@@ -64,4 +64,7 @@ public class User extends BaseEntity {
 
     @Column(name = "otp_created_at")
     private java.time.LocalDateTime otpCreatedAt;
+
+    @Column(name = "token_version", nullable = false)
+    private int tokenVersion = 0;
 }

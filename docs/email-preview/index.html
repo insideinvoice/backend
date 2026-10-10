@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Inside Invoice — email preview (RS-46)</title>
+<style>
+  body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#e5e7eb;color:#111827;}
+  header{padding:16px 24px;background:#fff;border-bottom:1px solid #d1d5db;}
+  h1{margin:0;font-size:16px;} p{margin:4px 0 0;color:#6b7280;font-size:13px;}
+  .row{display:flex;gap:24px;padding:24px;align-items:flex-start;flex-wrap:wrap;}
+  .pane{background:#fff;border:1px solid #d1d5db;border-radius:8px;overflow:hidden;}
+  .pane h2{margin:0;padding:10px 14px;font-size:13px;border-bottom:1px solid #e5e7eb;background:#f9fafb;}
+  iframe{border:0;display:block;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Inside Invoice &mdash; invoice email preview (sample invoice RS-46, incl. &#8377;28,000 discount)</h1>
+  <p>Subject: Tax Invoice RS-46 — RS Hardware | Rs. 25,960.00</p>
+</header>
+<div class="row">
+  <div class="pane"><h2>Desktop &mdash; 1200px viewport</h2>
+    <iframe src="invoice-email-rs46.html" width="1200" height="1500" title="desktop"></iframe>
+  </div>
+  <div class="pane"><h2>Mobile &mdash; 375px viewport</h2>
+    <iframe src="invoice-email-rs46.html" width="375" height="1500" title="mobile"></iframe>
+  </div>
+</div>
+</body>
+</html>

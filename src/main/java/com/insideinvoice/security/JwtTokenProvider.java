@@ -39,10 +39,15 @@ public class JwtTokenProvider {
     }
 
     public String generateAccessToken(Long userId, String email, Long businessId, String name) {
-        return generateAccessToken(userId, email, businessId, name, false);
+        return generateAccessToken(userId, email, businessId, name, false, 0);
     }
 
     public String generateAccessToken(Long userId, String email, Long businessId, String name, boolean rememberMe) {
+        return generateAccessToken(userId, email, businessId, name, rememberMe, 0);
+    }
+
+    public String generateAccessToken(Long userId, String email, Long businessId, String name,
+                                      boolean rememberMe, int tokenVersion) {
         long ttlMs = rememberMe ? rememberMeExpirationMs : expirationMs;
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + ttlMs);
@@ -53,10 +58,22 @@ public class JwtTokenProvider {
                 .claim(Constants.CLAIM_BUSINESS_ID, businessId)
                 .claim(Constants.CLAIM_USER_NAME, name)
                 .claim("email", email)
+                .claim(Constants.CLAIM_TOKEN_VERSION, tokenVersion)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(secretKey)
                 .compact();
+    }
+
+    /**
+     * Session version carried by the token. Tokens minted before V26 carry no claim
+     * and are read as version 0, which matches the column default — so existing
+     * sessions keep working across the deploy and are only dropped once the user
+     * (or a password change) bumps the stored version.
+     */
+    public int getTokenVersion(String token) {
+        Integer version = parseToken(token).get(Constants.CLAIM_TOKEN_VERSION, Integer.class);
+        return version == null ? 0 : version;
     }
 
     public String generateRefreshToken(Long userId) {

@@ -39,6 +39,9 @@ public class InvoiceEmailService {
     @Value("${app.frontend-base-url:https://insideinvoice.in}")
     private String defaultFrontendBaseUrl;
 
+    @Value("${app.mail.logo-url:}")
+    private String sellerLogoUrl;
+
     /**
      * @return the recipient address the invoice was sent to
      */
@@ -63,7 +66,7 @@ public class InvoiceEmailService {
         String shareUrl = base + "/i/" + share.getToken();
 
         InvoiceEmailTemplate.Content content =
-                InvoiceEmailTemplate.build(invoice, customer, business, shareUrl);
+                InvoiceEmailTemplate.build(invoice, customer, business, shareUrl, sellerLogoUrl);
 
         String fromName = safeName(business.getBusinessName()) + " via Inside Invoice";
         emailService.sendHtmlEmail(fromName, customer.getEmail().trim(),

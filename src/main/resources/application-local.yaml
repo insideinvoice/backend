@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5433/inside_invoice
+    url: jdbc:postgresql://localhost:5433/inside_invoice?socketTimeout=30&connectTimeout=10&tcpKeepAlive=true
     username: insideinvoice
     password: invoiceinside
     driver-class-name: org.postgresql.Driver
@@ -9,7 +9,9 @@ spring:
       minimum-idle: 5
       idle-timeout: 300000
       connection-timeout: 20000
-      max-lifetime: 1200000
+      max-lifetime: 600000
+      keepalive-time: 30000
+      validation-timeout: 5000
 
   jpa:
     show-sql: true

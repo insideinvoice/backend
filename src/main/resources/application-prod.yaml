@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://ep-proud-sky-b48o74qh-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+    url: jdbc:postgresql://ep-proud-sky-b48o74qh-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require&socketTimeout=30&connectTimeout=10&tcpKeepAlive=true
     username: neondb_owner
     password: npg_lzQnCNUwu27r
     driver-class-name: org.postgresql.Driver
@@ -9,7 +9,9 @@ spring:
       minimum-idle: 5
       idle-timeout: 300000
       connection-timeout: 20000
-      max-lifetime: 1200000
+      max-lifetime: 600000
+      keepalive-time: 30000
+      validation-timeout: 5000
 
   jpa:
     # SQL logging off in prod: show-sql wrote statements with row/PII values into logs.

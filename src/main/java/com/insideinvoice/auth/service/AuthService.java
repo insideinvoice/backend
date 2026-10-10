@@ -27,4 +27,7 @@ public interface AuthService {
     void updateProfile(UpdateProfileRequest request, Long userId);
 
     ApiResponse<Void> changePassword(ChangePasswordRequest request, Long userId);
+
+    /** Ends every server-side session for the user by rotating their token version. */
+    void revokeSessions(Long userId);
 }

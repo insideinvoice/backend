@@ -72,10 +72,18 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         String invoiceNumber;
         if (request.getInvoiceNumber() != null && !request.getInvoiceNumber().isBlank()) {
-            if (invoiceRepository.existsByInvoiceNumberAndBusinessId(request.getInvoiceNumber(), businessId)) {
-                throw new BadRequestException("Invoice number " + request.getInvoiceNumber() + " already exists");
+            // Same guard applyInvoiceNumber() uses on the update path: without it an
+            // over-long explicit number reached the VARCHAR(50) column and surfaced as
+            // a DataIntegrityViolation -> 409 "conflicts with existing data", which is
+            // both the wrong status and a misleading message for a validation failure.
+            String requested = request.getInvoiceNumber().trim();
+            if (requested.length() > 50) {
+                throw new BadRequestException("Invoice number must not exceed 50 characters");
             }
-            invoiceNumber = request.getInvoiceNumber();
+            if (invoiceRepository.existsByInvoiceNumberAndBusinessId(requested, businessId)) {
+                throw new BadRequestException("Invoice number " + requested + " already exists");
+            }
+            invoiceNumber = requested;
             invoiceNumberGenerator.reserveNextSequence(businessId);
         } else {
             invoiceNumber = invoiceNumberGenerator.generateNextInvoiceNumber(businessId);

@@ -84,6 +84,13 @@ public class AuthController {
     @PostMapping("/logout")
     @Operation(summary = "Logout and clear JWT cookie")
     public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest request, HttpServletResponse httpResponse) {
+        // Rotate the session version so the presented bearer token stops authenticating
+        // immediately — cookie clearing alone only covers cookie-based callers.
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof UserPrincipal principal) {
+            authService.revokeSessions(principal.getId());
+        }
+
         Cookie jwtCookie = new Cookie("jwt", null);
         jwtCookie.setHttpOnly(true);
         jwtCookie.setPath("/");

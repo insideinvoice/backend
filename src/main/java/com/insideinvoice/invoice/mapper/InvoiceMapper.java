@@ -78,15 +78,28 @@ public class InvoiceMapper {
                 .build();
     }
 
+    /**
+     * Single source of truth for the invoice-level discount amount: the same
+     * percentage the invoice stores and the totals engine applies. Rendering
+     * layers (email, PDF) must call this instead of inventing their own formula.
+     */
+    public static BigDecimal discountAmount(BigDecimal subtotal, BigDecimal discountPercent) {
+        BigDecimal pct = discountPercent != null ? discountPercent : BigDecimal.ZERO;
+        pct = pct.max(BigDecimal.ZERO).min(BigDecimal.valueOf(100));
+        return nvl(subtotal).multiply(pct).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal nvl(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
     public void calculateInvoiceTotals(Invoice invoice) {
         BigDecimal subtotal = invoice.getItems().stream()
                 .map(InvoiceItem::getTaxableValue)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal pct = invoice.getDiscountPercent() != null ? invoice.getDiscountPercent() : BigDecimal.ZERO;
-        pct = pct.max(BigDecimal.ZERO).min(BigDecimal.valueOf(100));
-        BigDecimal discountAmount = subtotal.multiply(pct).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal discountAmount = discountAmount(subtotal, invoice.getDiscountPercent());
         BigDecimal taxableAmount = subtotal.subtract(discountAmount).setScale(2, RoundingMode.HALF_UP);
 
         // GST must be computed on the discounted taxable value, not the full

@@ -29,6 +29,7 @@ import com.insideinvoice.labels.repository.UnNumberReferenceRepository;
 import com.insideinvoice.labels.service.HazmatLabelService;
 import com.insideinvoice.labels.util.Hashing;
 import com.insideinvoice.labels.util.ZplExporter;
+import com.insideinvoice.invoice.repository.InvoiceRepository;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.slf4j.Logger;
@@ -59,6 +60,7 @@ public class HazmatLabelServiceImpl implements HazmatLabelService {
     private final LabelFileRepository labelFileRepository;
     private final LabelAuditRepository labelAuditRepository;
     private final UnNumberReferenceRepository unNumberReferenceRepository;
+    private final InvoiceRepository invoiceRepository;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
 
@@ -67,6 +69,11 @@ public class HazmatLabelServiceImpl implements HazmatLabelService {
     @Override
     @Transactional
     public HazmatLabelResponse create(CreateHazmatLabelRequest request, Long businessId, Long userId, String ip) {
+        // tenant boundary: only invoices owned by this business may be referenced.
+        if (request.getInvoiceId() != null) {
+            invoiceRepository.findByIdAndBusinessId(request.getInvoiceId(), businessId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", request.getInvoiceId()));
+        }
         HazmatLabel e = new HazmatLabel();
         e.setBusinessId(businessId);
         e.setCreatedBy(userId);

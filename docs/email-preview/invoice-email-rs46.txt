@@ -1,0 +1,28 @@
+TAX INVOICE
+RS Hardware
+12 MG Road, Gandhi Nagar, Bengaluru Karnataka, 560001
+GSTIN: 29ABCDE1234F1Z5
+
+Invoice: RS-46
+Date: 09 Oct 2026  |  Due: 09 Oct 2026
+Place of supply: Karnataka
+Bill to: Mohammed Jawad
+
+Items:
+  1. Laptop (HSN 8471) — 1 x Rs.50,000.00, GST 18%, amount Rs.22,000.00
+
+Subtotal (before discount): Rs.50,000.00
+Discount (56% off): -Rs.28,000.00
+Taxable value: Rs.22,000.00
+CGST: Rs.1,980.00
+SGST: Rs.1,980.00
+Total: Rs.25,960.00
+You saved Rs.28,000.00
+Rupees Twenty Five Thousand Nine Hundred Sixty Only
+
+View invoice (no sign-in needed): https://insideinvoice.in/i/sample-share-token
+
+--
+Sent by Inside Invoice on behalf of RS Hardware.
+Automated message, please do not reply.
+www.insideinvoice.com
