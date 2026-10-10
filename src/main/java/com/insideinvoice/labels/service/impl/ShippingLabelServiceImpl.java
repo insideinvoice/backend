@@ -75,6 +75,13 @@ public class ShippingLabelServiceImpl implements ShippingLabelService {
     @Override
     @Transactional
     public ShippingLabelResponse create(CreateShippingLabelRequest request, Long businessId, Long userId, String ip) {
+        // tenant boundary: a label may only be linked to an invoice owned by this
+        // business. Without this, any invoice id (including another tenant's) was
+        // stored and echoed back in responses.
+        if (request.getInvoiceId() != null) {
+            invoiceRepository.findByIdAndBusinessId(request.getInvoiceId(), businessId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", request.getInvoiceId()));
+        }
         ShippingLabel e = new ShippingLabel();
         e.setBusinessId(businessId);
         e.setCreatedBy(userId);

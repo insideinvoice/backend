@@ -89,9 +89,29 @@ public class BusinessController {
             // Client-side read failure (truncated/corrupt part) — a 400, not a generic 500.
             throw new com.insideinvoice.exception.BadRequestException("Could not read uploaded file");
         }
+        // The stored value is rendered as data:image/png;base64, on every invoice, so a
+        // non-image (or an unreadable one) would silently break the signature band.
+        if (!isSupportedImage(bytes)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Signature must be a PNG, JPEG, WebP or GIF image"));
+        }
         String base64 = Base64.getEncoder().encodeToString(bytes);
         businessService.updateSignature(currentUser.getBusinessId(), base64);
         return ResponseEntity.ok(ApiResponse.success("Signature uploaded successfully", base64));
+    }
+
+    /** Magic-byte sniff: PNG, JPEG, GIF87a/89a, or WebP (RIFF....WEBP). */
+    private static boolean isSupportedImage(byte[] b) {
+        if (b.length < 12) {
+            return false;
+        }
+        boolean png = (b[0] & 0xFF) == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G';
+        boolean jpeg = (b[0] & 0xFF) == 0xFF && (b[1] & 0xFF) == 0xD8 && (b[2] & 0xFF) == 0xFF;
+        boolean gif = b[0] == 'G' && b[1] == 'I' && b[2] == 'F' && b[3] == '8'
+                && (b[4] == '7' || b[4] == '9') && b[5] == 'a';
+        boolean webp = b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F'
+                && b[8] == 'W' && b[9] == 'E' && b[10] == 'B' && b[11] == 'P';
+        return png || jpeg || gif || webp;
     }
 
     @DeleteMapping("/signature")

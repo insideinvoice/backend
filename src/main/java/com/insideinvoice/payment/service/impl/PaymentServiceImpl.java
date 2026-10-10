@@ -49,6 +49,12 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BadRequestException("Payment amount must be positive");
         }
 
+        // A cancelled invoice is void: recording a payment against it silently injected
+        // revenue into reports while the document itself was struck off.
+        if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
+            throw new BadRequestException("Cannot record a payment against a cancelled invoice");
+        }
+
         BigDecimal totalPaid = paymentRepository.findByInvoiceId(invoice.getId()).stream()
                 .map(Payment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);

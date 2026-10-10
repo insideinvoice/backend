@@ -18,6 +18,8 @@ import java.math.BigDecimal;
 @Builder
 public class UpdateProductRequest {
 
+    // Mirrors CreateProductRequest's @NotBlank without breaking partial updates.
+    @jakarta.validation.constraints.Pattern(regexp = ".*\\S.*", message = "Product name is required")
     @Size(max = 255, message = "Product name must not exceed 255 characters")
     private String name;
 

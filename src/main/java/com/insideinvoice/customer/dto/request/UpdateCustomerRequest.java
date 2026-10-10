@@ -16,6 +16,9 @@ import lombok.Setter;
 @Builder
 public class UpdateCustomerRequest {
 
+    // Create requires a name; update must not allow blanking it. @Pattern (not
+    // @NotBlank) so an omitted name still means "leave unchanged" for partial updates.
+    @Pattern(regexp = ".*\\S.*", message = "Customer name is required")
     @Size(max = 255, message = "Customer name must not exceed 255 characters")
     private String name;
 

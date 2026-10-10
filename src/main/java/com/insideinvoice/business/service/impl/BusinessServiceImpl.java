@@ -10,6 +10,7 @@ import com.insideinvoice.business.entity.Business;
 import com.insideinvoice.business.mapper.BusinessMapper;
 import com.insideinvoice.business.repository.BusinessRepository;
 import com.insideinvoice.business.service.BusinessService;
+import com.insideinvoice.exception.DuplicateResourceException;
 import com.insideinvoice.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -35,6 +36,14 @@ public class BusinessServiceImpl implements BusinessService {
 
         User user = userRepository.findByIdAndBusinessId(userId, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        // /business/setup is the FIRST-RUN flow only: replaying it after completion
+        // silently overwrote the business profile (name, GST, invoice convention...).
+        // Ongoing edits go through PUT /business/update.
+        if (user.isBusinessSetupCompleted()) {
+            throw new DuplicateResourceException(
+                    "Business setup has already been completed. Use Business Settings to make changes.");
+        }
 
         businessMapper.updateEntity(business, request);
         business.setOwnerName(user.getName());
