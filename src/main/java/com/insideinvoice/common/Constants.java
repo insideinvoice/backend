@@ -12,6 +12,7 @@ public final class Constants {
     public static final String CLAIM_BUSINESS_ID = "businessId";
     public static final String CLAIM_USER_ID = "userId";
     public static final String CLAIM_USER_NAME = "userName";
+    public static final String CLAIM_TOKEN_VERSION = "tv";
 
     public static final String API_AUTH = "/api/auth/**";
     public static final String API_CONTACT = "/api/contact/**";

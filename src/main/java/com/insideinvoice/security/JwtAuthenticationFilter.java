@@ -46,6 +46,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Long userId = jwtTokenProvider.getUserIdFromToken(jwt);
                 UserDetails userDetails = customUserDetailsService.loadUserById(userId);
 
+                // Session was revoked (logout bumps token_version): treat as anonymous
+                // rather than authenticating with a token the user has already ended.
+                if (userDetails instanceof UserPrincipal principal
+                        && principal.getTokenVersion() != jwtTokenProvider.getTokenVersion(jwt)) {
+                    log.warn("Rejected revoked JWT for user {}", userId);
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
                                 userDetails, null, userDetails.getAuthorities());

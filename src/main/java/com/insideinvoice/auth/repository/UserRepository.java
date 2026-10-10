@@ -3,6 +3,7 @@ package com.insideinvoice.auth.repository;
 import com.insideinvoice.auth.entity.Role;
 import com.insideinvoice.auth.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,4 +32,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     long countByRole(Role role);
 
     long countByBusinessId(Long businessId);
+
+    @Modifying
+    @Query("UPDATE User u SET u.tokenVersion = u.tokenVersion + 1 WHERE u.id = :id")
+    int incrementTokenVersion(@Param("id") Long id);
 }

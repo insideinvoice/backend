@@ -22,6 +22,7 @@ public class UserPrincipal implements UserDetails {
     private String password;
     private Long businessId;
     private boolean businessSetupCompleted;
+    private int tokenVersion;
     private Collection<? extends GrantedAuthority> authorities;
 
     public static UserPrincipal create(User user) {
@@ -36,6 +37,7 @@ public class UserPrincipal implements UserDetails {
                 .password(user.getPassword())
                 .businessId(user.getBusinessId())
                 .businessSetupCompleted(user.isBusinessSetupCompleted())
+                .tokenVersion(user.getTokenVersion())
                 .authorities(authorities)
                 .build();
     }

@@ -108,7 +108,8 @@ public class AuthServiceImpl implements AuthService {
         businessRepository.save(business);
 
         String token = jwtTokenProvider.generateAccessToken(
-                user.getId(), user.getEmail(), user.getBusinessId(), user.getName());
+                user.getId(), user.getEmail(), user.getBusinessId(), user.getName(),
+                false, user.getTokenVersion());
 
         log.info("User signed up successfully: {} as {}", user.getEmail(), role);
         return userMapper.toJwtResponse(user, token);
@@ -126,7 +127,7 @@ public class AuthServiceImpl implements AuthService {
 
         String token = jwtTokenProvider.generateAccessToken(
                 user.getId(), user.getEmail(), user.getBusinessId(), user.getName(),
-                Boolean.TRUE.equals(request.getRememberMe()));
+                Boolean.TRUE.equals(request.getRememberMe()), user.getTokenVersion());
 
         log.info("User logged in successfully: {}", user.getEmail());
         return userMapper.toJwtResponse(user, token);
@@ -290,5 +291,11 @@ public class AuthServiceImpl implements AuthService {
     private String generateOtp() {
         int otp = SECURE_RANDOM.nextInt(900000) + 100000;
         return String.valueOf(otp);
+    }
+    @Override
+    @Transactional
+    public void revokeSessions(Long userId) {
+        userRepository.incrementTokenVersion(userId);
+        log.info("All sessions revoked for userId {}", userId);
     }
 }
