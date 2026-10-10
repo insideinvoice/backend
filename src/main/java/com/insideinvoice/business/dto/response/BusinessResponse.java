@@ -41,6 +41,9 @@ public class BusinessResponse {
     private Boolean specialistInEnabled;
     private String invoiceTemplate;
     private String printSettings;
+    private String industry;
+    /** Resolved configuration for {@link #industry} — same package, no import needed. */
+    private IndustryConfigResponse industryConfig;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

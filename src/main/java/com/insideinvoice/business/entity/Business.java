@@ -99,4 +99,13 @@ public class Business extends BaseEntity {
 
     @Column(name = "print_settings", columnDefinition = "TEXT")
     private String printSettings;
+
+    /**
+     * Stable industry profile id (Industry enum). DEFAULT 'OTHER' at the DB
+     * level, so every business created before this feature resolves to the
+     * backward-compatible profile that hides nothing.
+     */
+    @Column(name = "industry", length = 40, nullable = false)
+    @Builder.Default
+    private String industry = "OTHER";
 }

@@ -1,6 +1,8 @@
 package com.insideinvoice.invoice.share;
 
 import com.insideinvoice.business.entity.Business;
+import com.insideinvoice.business.industry.IndustryField;
+import com.insideinvoice.business.industry.IndustryRegistry;
 import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.entity.InvoiceItem;
@@ -67,7 +69,7 @@ public class PublicInvoicePdfService {
             y = ensureRoomForTotals(c, invoice, y);
             y = drawTotals(c, invoice, y);
             y = drawAmountInWords(c, invoice, y);
-            y = drawTerms(c, invoice, y);
+            y = drawTerms(c, invoice, business, y);
             drawPaymentBox(c, business, y);
 
             return c.save();
@@ -284,10 +286,18 @@ public class PublicInvoicePdfService {
         return y + 4;
     }
 
-    private double drawTerms(PdfCanvas c, Invoice invoice, double y) throws IOException {
+    private double drawTerms(PdfCanvas c, Invoice invoice, Business business, double y) throws IOException {
         StringBuilder terms = new StringBuilder();
         appendLabeled(terms, "Payment Terms", invoice.getPaymentTerms());
-        appendLabeled(terms, "Terms of Delivery", invoice.getTermsOfDelivery());
+        // A value the industry profile hides is still stored — it just must not
+        // be printed, so the public PDF follows the same suppression as the
+        // private templates.
+        boolean deliveryHidden = IndustryRegistry.forRawIndustry(
+                business != null ? business.getIndustry() : null)
+                .hiddenFields().contains(IndustryField.TERMS_OF_DELIVERY);
+        if (!deliveryHidden) {
+            appendLabeled(terms, "Terms of Delivery", invoice.getTermsOfDelivery());
+        }
         appendLabeled(terms, "Notes", invoice.getNotes());
         if (terms.length() == 0) {
             return y;

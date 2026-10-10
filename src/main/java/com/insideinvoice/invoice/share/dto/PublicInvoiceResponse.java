@@ -78,6 +78,7 @@ public class PublicInvoiceResponse {
         private String specialistIn;
         private Boolean specialistInEnabled;
         private String signature;
+        private String industry;
         private PaymentInstructions payment;
     }
 
