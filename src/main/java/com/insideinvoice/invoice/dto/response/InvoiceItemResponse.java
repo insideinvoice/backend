@@ -20,6 +20,7 @@ public class InvoiceItemResponse {
     private Integer sno;
     private String itemName;
     private String hsn;
+    private String unit;
     private BigDecimal qty;
     private BigDecimal rate;
     private BigDecimal gstPercentage;

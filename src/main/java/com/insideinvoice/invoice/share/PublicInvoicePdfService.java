@@ -37,6 +37,8 @@ public class PublicInvoicePdfService {
 
     // item table columns (sum = CONTENT_W)
     private static final double[] COL_W = {10, 66, 22, 14, 18, 22, 34};
+    // when the business hides HSN/SAC, drop that column and fold its width into DESC
+    private static final double[] COL_W_NO_HSN = {10, 88, 14, 18, 22, 34};
 
     private static final Locale LOCALE_IN = Locale.forLanguageTag("en-IN");
 
@@ -62,10 +64,14 @@ public class PublicInvoicePdfService {
             meta.setAuthor(business != null ? business.getBusinessName() : "Inside Invoice");
             startPage(c, null);
 
+            // Display-only HSN/SAC switch; default ON so the PDF is unchanged
+            // until a business opts out.
+            boolean showHnSac = business == null || business.getShowHnSac() == null || business.getShowHnSac();
+
             double y = drawTitle(c, proforma);
             y = drawSellerAndMeta(c, invoice, business, y);
             y = drawBuyer(c, customer, y);
-            y = drawItemsTable(c, invoice, y);
+            y = drawItemsTable(c, invoice, y, showHnSac);
             y = ensureRoomForTotals(c, invoice, y);
             y = drawTotals(c, invoice, y);
             y = drawAmountInWords(c, invoice, y);
@@ -186,33 +192,40 @@ public class PublicInvoicePdfService {
         return y + boxH + 5;
     }
 
-    private double drawItemsTable(PdfCanvas c, Invoice invoice, double y) throws IOException {
-        y = tableHeader(c, y);
+    private double drawItemsTable(PdfCanvas c, Invoice invoice, double y, boolean showHnSac) throws IOException {
+        y = tableHeader(c, y, showHnSac);
         int index = 0;
         for (InvoiceItem item : invoice.getItems()) {
             index++;
-            List<String> descLines = c.wrap(nz(item.getItemName()), COL_W[1] - 3, 8, false);
+            double[] colW = showHnSac ? COL_W : COL_W_NO_HSN;
+            List<String> descLines = c.wrap(nz(item.getItemName()), colW[1] - 3, 8, false);
             if (descLines.size() > 2) {
                 descLines = descLines.subList(0, 2);
             }
             double rowH = Math.max(7.0, 2.2 + descLines.size() * 4.0);
             if (y + rowH > BOTTOM_SAFE) {
                 y = startPage(c, "Invoice " + invoice.getInvoiceNumber() + " (continued)");
-                y = tableHeader(c, y);
+                y = tableHeader(c, y, showHnSac);
             }
             boolean alt = index % 2 == 0;
             if (alt) {
                 c.fillRgb(248, 250, 252);
                 c.fillRect(M, y, CONTENT_W, rowH);
             }
-            double[] x = colX();
-            c.text(String.valueOf(item.getSno() != null ? item.getSno() : index), x[0] + COL_W[0] / 2, y + 1.6, 8, false, PdfCanvas.Align.CENTER);
+            double[] x = colX(showHnSac);
+            c.text(String.valueOf(item.getSno() != null ? item.getSno() : index), x[0] + colW[0] / 2, y + 1.6, 8, false, PdfCanvas.Align.CENTER);
             c.drawLines(descLines, x[1] + 1.5, y + 1.6, 4.0, 8, false, PdfCanvas.Align.LEFT);
-            c.text(nz(item.getHsn()), x[2] + COL_W[2] / 2, y + 1.6, 8, false, PdfCanvas.Align.CENTER);
-            c.text(dec(item.getGstPercentage(), false) + "%", x[3] + COL_W[3] - 1.5, y + 1.6, 8, false, PdfCanvas.Align.RIGHT);
-            c.text(num(item.getQty()), x[4] + COL_W[4] - 1.5, y + 1.6, 8, false, PdfCanvas.Align.RIGHT);
-            c.text(num(item.getRate()), x[5] + COL_W[5] - 1.5, y + 1.6, 8, false, PdfCanvas.Align.RIGHT);
-            c.text(num(item.getTaxableValue()), x[6] + COL_W[6] - 1.5, y + 1.6, 8, true, PdfCanvas.Align.RIGHT);
+            if (showHnSac) {
+                c.text(nz(item.getHsn()), x[2] + colW[2] / 2, y + 1.6, 8, false, PdfCanvas.Align.CENTER);
+            }
+            int gstIdx = showHnSac ? 3 : 2;
+            int qtyIdx = showHnSac ? 4 : 3;
+            int rateIdx = showHnSac ? 5 : 4;
+            int amtIdx = showHnSac ? 6 : 5;
+            c.text(dec(item.getGstPercentage(), false) + "%", x[gstIdx] + colW[gstIdx] - 1.5, y + 1.6, 8, false, PdfCanvas.Align.RIGHT);
+            c.text(num(item.getQty()) + unitSuffix(item), x[qtyIdx] + colW[qtyIdx] - 1.5, y + 1.6, 8, false, PdfCanvas.Align.RIGHT);
+            c.text(num(item.getRate()), x[rateIdx] + colW[rateIdx] - 1.5, y + 1.6, 8, false, PdfCanvas.Align.RIGHT);
+            c.text(num(item.getTaxableValue()), x[amtIdx] + colW[amtIdx] - 1.5, y + 1.6, 8, true, PdfCanvas.Align.RIGHT);
             c.strokeRgb(203, 213, 225);
             c.line(M, y + rowH, M + CONTENT_W, y + rowH, 0.2);
             y += rowH;
@@ -223,19 +236,32 @@ public class PublicInvoicePdfService {
         return y + 3;
     }
 
-    private double tableHeader(PdfCanvas c, double y) throws IOException {
+    private double tableHeader(PdfCanvas c, double y, boolean showHnSac) throws IOException {
+        double[] colW = showHnSac ? COL_W : COL_W_NO_HSN;
         c.fillRgb(30, 41, 59);
         c.fillRect(M, y, CONTENT_W, 7);
-        double[] x = colX();
+        double[] x = colX(showHnSac);
         c.fillWhite();
-        c.text("SNO", x[0] + COL_W[0] / 2, y + 1.5, 7.5, true, PdfCanvas.Align.CENTER);
+        c.text("SNO", x[0] + colW[0] / 2, y + 1.5, 7.5, true, PdfCanvas.Align.CENTER);
         c.text("DESCRIPTION", x[1] + 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.LEFT);
-        c.text("HSN/SAC", x[2] + COL_W[2] / 2, y + 1.5, 7.5, true, PdfCanvas.Align.CENTER);
-        c.text("GST %", x[3] + COL_W[3] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
-        c.text("QUANTITY", x[4] + COL_W[4] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
-        c.text("RATE", x[5] + COL_W[5] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
-        c.text("AMOUNT", x[6] + COL_W[6] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
+        if (showHnSac) {
+            c.text("HSN/SAC", x[2] + colW[2] / 2, y + 1.5, 7.5, true, PdfCanvas.Align.CENTER);
+        }
+        int gstIdx = showHnSac ? 3 : 2;
+        int qtyIdx = showHnSac ? 4 : 3;
+        int rateIdx = showHnSac ? 5 : 4;
+        int amtIdx = showHnSac ? 6 : 5;
+        c.text("GST %", x[gstIdx] + colW[gstIdx] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
+        c.text("QUANTITY", x[qtyIdx] + colW[qtyIdx] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
+        c.text("RATE", x[rateIdx] + colW[rateIdx] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
+        c.text("AMOUNT", x[amtIdx] + colW[amtIdx] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
         return y + 7;
+    }
+
+    /** " 2 Nos" when the item has a unit, else empty — display only, never affects maths. */
+    private static String unitSuffix(InvoiceItem item) {
+        String unit = item.getUnit();
+        return unit == null || unit.isBlank() ? "" : " " + unit.trim();
     }
 
     private double ensureRoomForTotals(PdfCanvas c, Invoice invoice, double y) throws IOException {
@@ -342,12 +368,13 @@ public class PublicInvoicePdfService {
 
     // ------------------------------------------------------------------ helpers
 
-    private static double[] colX() {
-        double[] x = new double[COL_W.length];
+    private static double[] colX(boolean showHnSac) {
+        double[] colW = showHnSac ? COL_W : COL_W_NO_HSN;
+        double[] x = new double[colW.length];
         double acc = M;
-        for (int i = 0; i < COL_W.length; i++) {
+        for (int i = 0; i < colW.length; i++) {
             x[i] = acc;
-            acc += COL_W[i];
+            acc += colW[i];
         }
         return x;
     }

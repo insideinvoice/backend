@@ -67,4 +67,10 @@ public class BusinessUpdateRequest {
     private String specialistIn;
 
     private Boolean specialistInEnabled;
+
+    /**
+     * Show (TRUE) or hide (FALSE) the HSN/SAC column on invoices. Display only:
+     * stored codes and GST calculations are unaffected. Null = leave unchanged.
+     */
+    private Boolean showHnSac;
 }

@@ -96,6 +96,11 @@ public class BusinessServiceImpl implements BusinessService {
         if (request.getIndustry() != null) {
             business.setIndustry(Industry.resolve(request.getIndustry()).getId());
         }
+        // HSN/SAC display switch: null = leave unchanged. Display only — stored
+        // codes and GST calculations are never touched by this setting.
+        if (request.getShowHnSac() != null) {
+            business.setShowHnSac(request.getShowHnSac());
+        }
 
         business = businessRepository.save(business);
         log.info("Business updated: {}", businessId);
@@ -112,6 +117,9 @@ public class BusinessServiceImpl implements BusinessService {
         }
         if (request.getPrintSettings() != null) {
             business.setPrintSettings(request.getPrintSettings());
+        }
+        if (request.getShowHnSac() != null) {
+            business.setShowHnSac(request.getShowHnSac());
         }
         return businessMapper.toResponse(businessRepository.save(business));
     }

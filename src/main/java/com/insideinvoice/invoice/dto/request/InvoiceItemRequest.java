@@ -30,6 +30,9 @@ public class InvoiceItemRequest {
 
     private String hsn;
 
+    @Size(max = 50, message = "Unit must not exceed 50 characters")
+    private String unit;
+
     @NotNull(message = "Quantity is required")
     @DecimalMin(value = "0.01", message = "Quantity must be greater than 0")
     private BigDecimal qty;

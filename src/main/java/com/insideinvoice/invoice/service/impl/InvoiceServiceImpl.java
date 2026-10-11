@@ -9,6 +9,7 @@ import com.insideinvoice.invoice.dto.request.CreateInvoiceRequest;
 import com.insideinvoice.invoice.dto.request.InvoiceItemRequest;
 import com.insideinvoice.invoice.dto.request.UpdateInvoiceRequest;
 import com.insideinvoice.invoice.dto.response.InvoiceResponse;
+import com.insideinvoice.invoice.entity.BillingMode;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.entity.InvoiceStatus;
 import com.insideinvoice.invoice.entity.InvoiceType;
@@ -208,6 +209,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setOtherReferences(request.getOtherReferences());
         invoice.setDestination(request.getDestination());
         invoice.setPaymentMode(request.getPaymentMode());
+        invoice.setBillingMode(BillingMode.fromRaw(request.getBillingMode()));
         invoice.setDiscountPercent(request.getDiscountPercent() != null ? request.getDiscountPercent() : BigDecimal.ZERO);
 
         invoice.getItems().clear();
@@ -266,6 +268,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setOtherReferences(request.getOtherReferences());
         invoice.setDestination(request.getDestination());
         invoice.setPaymentMode(request.getPaymentMode());
+        invoice.setBillingMode(BillingMode.fromRaw(request.getBillingMode()));
         invoice.setDiscountPercent(request.getDiscountPercent() != null ? request.getDiscountPercent() : BigDecimal.ZERO);
 
         invoice.getItems().clear();

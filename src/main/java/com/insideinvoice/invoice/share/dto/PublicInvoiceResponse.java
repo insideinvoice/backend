@@ -40,6 +40,15 @@ public class PublicInvoiceResponse {
     private String template;
     private String paperSize;
 
+    /** Construction billing representation (COMPLETE_PROJECT / ITEMIZED); null = standard. */
+    private String billingMode;
+
+    /**
+     * Display-only HSN/SAC switch snapshot; TRUE (default) keeps the historical
+     * rendering. Never affects stored codes or GST calculations.
+     */
+    private Boolean showHnSac;
+
     private String paymentTerms;
     private String paymentMode;
     private String placeOfSupply;
@@ -77,6 +86,8 @@ public class PublicInvoiceResponse {
         private String pincode;
         private String specialistIn;
         private Boolean specialistInEnabled;
+        /** Display-only HSN/SAC switch, mirrored here so public templates can read it from the seller block. */
+        private Boolean showHnSac;
         private String signature;
         private String industry;
         private PaymentInstructions payment;
@@ -122,6 +133,7 @@ public class PublicInvoiceResponse {
         private Integer sno;
         private String itemName;
         private String hsn;
+        private String unit;
         private BigDecimal qty;
         private BigDecimal rate;
         private BigDecimal gstPercentage;

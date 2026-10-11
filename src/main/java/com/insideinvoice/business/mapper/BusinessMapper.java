@@ -69,6 +69,7 @@ public class BusinessMapper {
                 .invoiceTemplate(business.getInvoiceTemplate())
                 .printSettings(business.getPrintSettings())
                 .industry(Industry.resolve(business.getIndustry()).getId())
+                .showHnSac(business.getShowHnSac() == null || business.getShowHnSac())
                 .industryConfig(IndustryConfigResponse.from(
                         IndustryRegistry.forRawIndustry(business.getIndustry())))
                 .createdAt(business.getCreatedAt())

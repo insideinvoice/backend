@@ -4,6 +4,7 @@ import com.insideinvoice.invoice.dto.request.CreateInvoiceRequest;
 import com.insideinvoice.invoice.dto.request.InvoiceItemRequest;
 import com.insideinvoice.invoice.dto.response.InvoiceItemResponse;
 import com.insideinvoice.invoice.dto.response.InvoiceResponse;
+import com.insideinvoice.invoice.entity.BillingMode;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.entity.InvoiceItem;
 import com.insideinvoice.invoice.entity.InvoiceStatus;
@@ -40,6 +41,7 @@ public class InvoiceMapper {
                 .destination(request.getDestination())
                 .paymentMode(request.getPaymentMode())
                 .discountPercent(request.getDiscountPercent() != null ? request.getDiscountPercent() : BigDecimal.ZERO)
+                .billingMode(BillingMode.fromRaw(request.getBillingMode()))
                 .createdBy(userId)
                 .build();
 
@@ -69,6 +71,9 @@ public class InvoiceMapper {
                 .sno(request.getSno())
                 .itemName(request.getItemName())
                 .hsn(request.getHsn())
+                // Older clients omit unit; 'Piece' is what templates hard-coded, so
+                // a missing value renders exactly as before V28.
+                .unit(request.getUnit() == null || request.getUnit().isBlank() ? "Piece" : request.getUnit().trim())
                 .qty(qty)
                 .rate(rate)
                 .gstPercentage(gstPercentage)
@@ -165,6 +170,7 @@ public class InvoiceMapper {
                 .destination(invoice.getDestination())
                 .paymentMode(invoice.getPaymentMode())
                 .discountPercent(invoice.getDiscountPercent())
+                .billingMode(invoice.getBillingMode() == null ? null : invoice.getBillingMode().name())
                 .createdBy(invoice.getCreatedBy())
                 .createdAt(invoice.getCreatedAt())
                 .updatedAt(invoice.getUpdatedAt())
@@ -179,6 +185,7 @@ public class InvoiceMapper {
                 .sno(item.getSno())
                 .itemName(item.getItemName())
                 .hsn(item.getHsn())
+                .unit(item.getUnit())
                 .qty(item.getQty())
                 .rate(item.getRate())
                 .gstPercentage(item.getGstPercentage())

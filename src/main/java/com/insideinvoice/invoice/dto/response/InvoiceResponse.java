@@ -45,6 +45,8 @@ public class InvoiceResponse {
     private String destination;
     private Long createdBy;
     private String paymentMode;
+    /** Construction billing representation (COMPLETE_PROJECT / ITEMIZED); null = standard. */
+    private String billingMode;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<InvoiceItemResponse> items;

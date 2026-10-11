@@ -13,4 +13,7 @@ public class UpdateInvoiceSettingsRequest {
 
     @Size(max = 4000)
     private String printSettings;
+
+    /** null = leave unchanged (older clients). */
+    private Boolean showHnSac;
 }

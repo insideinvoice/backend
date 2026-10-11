@@ -103,17 +103,25 @@ public final class IndustryRegistry {
                 DocumentAccess.of(true, true, false)));
 
         // --- Transport & Logistics ------------------------------------------
+        // Freight billing: consignment/LR identity, vehicle, e-way bill and
+        // destination are the document's spine — nothing is hidden.
         register(IndustryConfig.of(Industry.TRANSPORT,
                 Set.of(),
                 Map.of(
                         IndustryField.DELIVERY_NOTE, "Consignment / LR No.",
                         IndustryField.DISPATCHED_THROUGH, "Vehicle / Carrier",
                         IndustryField.DESTINATION, "Delivery Destination",
-                        IndustryField.OTHER_REFERENCES, "Shipper P.O. / Reference"),
+                        IndustryField.DISPATCH_DOC_NUMBER, "E-way Bill No.",
+                        IndustryField.REFERENCE_NUMBER, "Freight / Trip Ref.",
+                        IndustryField.OTHER_REFERENCES, "Shipper P.O. / Reference",
+                        IndustryField.ITEM_NAME, "Description of Goods / Service"),
                 Map.of(
                         IndustryField.DELIVERY_NOTE, "e.g. LR-8891 / consignment no.",
                         IndustryField.DISPATCHED_THROUGH, "e.g. Truck MH-12-AB-1234",
-                        IndustryField.OTHER_REFERENCES, "e.g. Shipper PO number"),
+                        IndustryField.DISPATCH_DOC_NUMBER, "e.g. EWB-3812 4490 1122",
+                        IndustryField.REFERENCE_NUMBER, "e.g. Trip / freight trip ref",
+                        IndustryField.OTHER_REFERENCES, "e.g. Shipper PO number",
+                        IndustryField.DESTINATION, "e.g. Pune distribution centre"),
                 DocumentAccess.of(true, true, true)));
 
         // --- Food & Hospitality ---------------------------------------------
@@ -187,14 +195,24 @@ public final class IndustryRegistry {
                 DocumentAccess.of(false, false, false)));
 
         // --- Agriculture & Primary Goods -------------------------------------
+        // Produce is sold by weight/consignment: lot & grade identity, mandi
+        // receipt and delivery point are relabelled onto existing fields only.
         register(IndustryConfig.of(Industry.AGRICULTURE,
                 Set.of(),
                 Map.of(
-                        IndustryField.DELIVERY_NOTE, "Consignment Note",
-                        IndustryField.OTHER_REFERENCES, "Lot / Grade Reference"),
+                        IndustryField.DELIVERY_NOTE, "Consignment / Lot Note",
+                        IndustryField.REFERENCE_NUMBER, "Lot / Grade Reference",
+                        IndustryField.DISPATCH_DOC_NUMBER, "Mandi / Gate Receipt No.",
+                        IndustryField.DESTINATION, "Mandi / Delivery Point",
+                        IndustryField.DISPATCHED_THROUGH, "Vehicle / Carrier",
+                        IndustryField.OTHER_REFERENCES, "Farm / Produce Reference",
+                        IndustryField.ITEM_NAME, "Produce / Description"),
                 Map.of(
-                        IndustryField.OTHER_REFERENCES, "e.g. Lot, grade or produce ref",
-                        IndustryField.DELIVERY_NOTE, "e.g. Consignment / lot note"),
+                        IndustryField.DELIVERY_NOTE, "e.g. Consignment / lot note",
+                        IndustryField.REFERENCE_NUMBER, "e.g. Lot-24 grade A",
+                        IndustryField.DISPATCH_DOC_NUMBER, "e.g. Mandi receipt no.",
+                        IndustryField.DESTINATION, "e.g. APMC market, Bengaluru",
+                        IndustryField.OTHER_REFERENCES, "e.g. Farm, batch or produce ref"),
                 DocumentAccess.of(true, true, true)));
 
         // --- General Business -----------------------------------------------

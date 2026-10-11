@@ -108,4 +108,13 @@ public class Business extends BaseEntity {
     @Column(name = "industry", length = 40, nullable = false)
     @Builder.Default
     private String industry = "OTHER";
+
+    /**
+     * Display-only switch for the HSN/SAC column on invoice documents. TRUE
+     * (DB default) keeps the historical rendering; FALSE hides the column.
+     * Stored codes and GST calculations are never affected by this switch.
+     */
+    @Column(name = "show_hsn_sac", nullable = false)
+    @Builder.Default
+    private Boolean showHnSac = true;
 }

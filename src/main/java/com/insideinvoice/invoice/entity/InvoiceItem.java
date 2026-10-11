@@ -46,6 +46,14 @@ public class InvoiceItem {
     @Column(name = "hsn")
     private String hsn;
 
+    /**
+     * Unit shown in the templates' "per" column. DB default 'Piece' matches the
+     * value every template hard-coded before V28, so legacy rows render the same.
+     */
+    @Column(name = "unit", length = 50, nullable = false)
+    @Builder.Default
+    private String unit = "Piece";
+
     @Column(name = "qty", nullable = false, precision = 10, scale = 2)
     private BigDecimal qty;
 

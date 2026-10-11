@@ -115,6 +115,15 @@ public class Invoice extends BaseEntity {
     @Column(name = "payment_mode", length = 20)
     private String paymentMode;
 
+    /**
+     * Construction billing representation (V28): COMPLETE_PROJECT or ITEMIZED.
+     * NULL = standard invoice. Display/editor hint only — totals always come
+     * from the line items via the shared engine.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_mode", length = 20)
+    private BillingMode billingMode;
+
     /** Opaque public share token (base64url of 256 random bits). NULL = never shared. */
     @Column(name = "share_token", length = 64, unique = true)
     private String shareToken;

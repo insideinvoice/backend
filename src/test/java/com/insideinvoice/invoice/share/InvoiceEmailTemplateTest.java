@@ -125,6 +125,79 @@ class InvoiceEmailTemplateTest {
                 .contains("www.insideinvoice.com");
     }
 
+    // ---------------------------------------------------------- HSN/SAC switch
+
+    /** RS-46 sample with a unit so the qty suffix path is covered. */
+    private Invoice hsnSample() {
+        Invoice invoice = rs46Invoice();
+        invoice.setItems(List.of(InvoiceItem.builder()
+                .sno(1)
+                .itemName("Laptop")
+                .hsn("8471")
+                .unit("Piece")
+                .qty(new BigDecimal("1"))
+                .rate(new BigDecimal("50000.00"))
+                .gstPercentage(new BigDecimal("18"))
+                .taxableValue(new BigDecimal("50000.00"))
+                .taxAmount(new BigDecimal("9000.00"))
+                .total(new BigDecimal("59000.00"))
+                .build()));
+        return invoice;
+    }
+
+    @Test
+    @DisplayName("HSN switch ON (or missing on legacy rows): HSN text renders in HTML and plain text")
+    void hsnColumnOnByDefault() {
+        Business on = Business.builder().businessName("RS Hardware").state("Karnataka").showHnSac(true).build();
+        // Pre-V28 rows can still surface a null switch; renderers treat that as ON.
+        Business legacy = Business.builder().businessName("RS Hardware").state("Karnataka").showHnSac(null).build();
+        for (Business business : List.of(on, legacy)) {
+            InvoiceEmailTemplate.Content content =
+                    InvoiceEmailTemplate.build(hsnSample(), customer(), business, "https://x/i/tok");
+            assertThat(content.html()).contains("HSN 8471");
+            assertThat(content.text()).contains("(HSN 8471)");
+            assertThat(content.html()).contains("Piece");
+            assertThat(content.text()).contains("Piece");
+        }
+    }
+
+    @Test
+    @DisplayName("HSN switch OFF: HSN line disappears from HTML and text; unit, totals and layout intact")
+    void hsnColumnOffHidesCodesOnly() {
+        Business off = Business.builder().businessName("RS Hardware").state("Karnataka").showHnSac(false).build();
+        InvoiceEmailTemplate.Content content =
+                InvoiceEmailTemplate.build(hsnSample(), customer(), off, "https://x/i/tok");
+
+        assertThat(content.html())
+                .doesNotContain("HSN 8471")
+                .doesNotContain("8471")
+                .contains("Laptop")
+                .contains("Piece")
+                .contains("50,000.00")
+                .contains("25,960.00")
+                .contains("CGST")
+                .contains("SGST");
+        assertThat(content.text())
+                .doesNotContain("(HSN 8471)")
+                .doesNotContain("8471")
+                .contains("Laptop")
+                .contains("Piece")
+                .contains("Rs.25,960.00");
+    }
+
+    @Test
+    @DisplayName("HSN switch OFF with a blank HSN is a no-op; subject and totals unchanged")
+    void hsnOffDoesNotTouchTotals() {
+        Business off = Business.builder().businessName("RS Hardware").state("Karnataka").showHnSac(false).build();
+        Business on = Business.builder().businessName("RS Hardware").state("Karnataka").showHnSac(true).build();
+        InvoiceEmailTemplate.Content hidden = InvoiceEmailTemplate.build(hsnSample(), customer(), off, "https://x/i/tok");
+        InvoiceEmailTemplate.Content shown = InvoiceEmailTemplate.build(hsnSample(), customer(), on, "https://x/i/tok");
+
+        assertThat(hidden.subject()).isEqualTo(shown.subject());
+        assertThat(hidden.html()).doesNotContain("8471");
+        assertThat(shown.html()).contains("8471");
+    }
+
     // ------------------------------------------------------------- discount
 
     /** RS-46 sample: Laptop, HSN 8471, qty 1, rate 50,000, GST 18%, discount 56%. */

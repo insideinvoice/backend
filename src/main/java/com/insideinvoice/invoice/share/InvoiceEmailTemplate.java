@@ -97,6 +97,9 @@ public final class InvoiceEmailTemplate {
                 ? taxable.divide(subtotal, 10, RoundingMode.HALF_UP) : BigDecimal.ONE;
 
         StringBuilder html = new StringBuilder(16384);
+        // Display-only HSN/SAC switch: default ON (null-safe) so emails are
+        // unchanged until a business opts out.
+        boolean showHsn = business == null || business.getShowHnSac() == null || business.getShowHnSac();
 
         // ---- head ----
         html.append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n")
@@ -282,18 +285,21 @@ public final class InvoiceEmailTemplate {
                 .append(ROW_LINE).append(";\">")
                 .append("<p style=\"margin:0;font-family:").append(FONT).append(";font-size:14px;font-weight:600;")
                 .append("color:").append(INK).append(";line-height:1.4;\">").append(esc(safe(item.getItemName()))).append("</p>");
-            if (notBlank(item.getHsn())) {
+            if (showHsn && notBlank(item.getHsn())) {
                 html.append("<p style=\"margin:3px 0 0;font-family:").append(FONT).append(";font-size:12px;")
                     .append("color:").append(MUTED).append(";line-height:1.4;\">HSN ").append(esc(item.getHsn().trim()))
                     .append("</p>");
             }
             html.append("<p class=\"m-only\" style=\"margin:4px 0 0;font-family:").append(FONT).append(";font-size:12px;")
                 .append("color:").append(MUTED).append(";\">Qty ").append(stripZeros(qty))
+                .append(notBlank(item.getUnit()) ? " " + esc(item.getUnit().trim()) : "")
                 .append(" \u00d7 \u20b9").append(inr(rate)).append(" &nbsp;\u00b7&nbsp; GST ").append(gstPct).append("%</p>")
                 .append("</td>")
                 .append("<td class=\"c-qty\" align=\"right\" valign=\"top\" style=\"padding:14px 8px;border-top:1px solid ")
                 .append(ROW_LINE).append(";font-size:13px;color:#374151;white-space:nowrap;\">")
-                .append(stripZeros(qty)).append("</td>")
+                .append(stripZeros(qty))
+                .append(notBlank(item.getUnit()) ? " " + esc(item.getUnit().trim()) : "")
+                .append("</td>")
                 .append("<td class=\"c-rate\" align=\"right\" valign=\"top\" style=\"padding:14px 8px;border-top:1px solid ")
                 .append(ROW_LINE).append(";font-size:13px;color:#374151;white-space:nowrap;\">")
                 .append("\u20b9").append(inr(rate)).append("</td>")
@@ -488,6 +494,8 @@ public final class InvoiceEmailTemplate {
         BigDecimal ratio = subtotal.signum() > 0
                 ? taxable.divide(subtotal, 10, RoundingMode.HALF_UP) : BigDecimal.ONE;
 
+        // Display-only HSN/SAC switch; default ON so text is unchanged until opted out.
+        boolean showHnSac = business == null || business.getShowHnSac() == null || business.getShowHnSac();
         List<InvoiceItem> items = invoice.getItems() == null ? List.of() : invoice.getItems();
         List<BigDecimal> itemAmounts = allocateItemAmounts(items, ratio, taxable);
         int sno = 0;
@@ -498,8 +506,10 @@ public final class InvoiceEmailTemplate {
             BigDecimal rate = nvl(item.getRate());
             BigDecimal amount = itemAmounts.get(sno - 1);
             sb.append("  ").append(sno).append(". ").append(safe(item.getItemName()));
-            if (notBlank(item.getHsn())) sb.append(" (HSN ").append(item.getHsn().trim()).append(")");
-            sb.append(" \u2014 ").append(stripZeros(qty)).append(" x Rs.").append(inr(rate))
+            if (showHnSac && notBlank(item.getHsn())) sb.append(" (HSN ").append(item.getHsn().trim()).append(")");
+            sb.append(" \u2014 ").append(stripZeros(qty))
+              .append(notBlank(item.getUnit()) ? " " + item.getUnit().trim() : "")
+              .append(" x Rs.").append(inr(rate))
               .append(", GST ").append(nvl(item.getGstPercentage()).stripTrailingZeros().toPlainString()).append('%')
               .append(", amount Rs.").append(inr(amount)).append("\n");
         }

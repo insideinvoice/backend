@@ -42,6 +42,8 @@ public class BusinessResponse {
     private String invoiceTemplate;
     private String printSettings;
     private String industry;
+    /** Display-only HSN/SAC visibility; never affects stored codes or taxes. */
+    private Boolean showHnSac;
     /** Resolved configuration for {@link #industry} — same package, no import needed. */
     private IndustryConfigResponse industryConfig;
     private LocalDateTime createdAt;
