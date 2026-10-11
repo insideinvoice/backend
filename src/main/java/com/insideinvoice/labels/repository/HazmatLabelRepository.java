@@ -20,7 +20,8 @@ public interface HazmatLabelRepository extends JpaRepository<HazmatLabel, Long> 
     boolean existsByBusinessIdAndLabelNumber(Long businessId, String labelNumber);
 
     /** All rows incl. soft-deleted — used by admin purge and label-file cleanup. */
-    List<Long> findIdByBusinessId(Long businessId);
+    @Query("SELECT h.id FROM HazmatLabel h WHERE h.businessId = :businessId")
+    List<Long> findIdByBusinessId(@Param("businessId") Long businessId);
 
     void deleteByBusinessId(Long businessId);
 

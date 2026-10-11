@@ -260,6 +260,20 @@ public class BackupService {
         }
     }
 
+    /** Creates a raw (unencrypted) SQL dump for direct download. */
+    public void createRawDump(Path outputFile) throws IOException, InterruptedException {
+        if (!isPgDumpAvailable()) {
+            throw new IOException("pg_dump not found in PATH. Install postgresql-client package.");
+        }
+
+        DatabaseConnectionParser.ParsedDatabase db = DatabaseConnectionParser.parse(jdbcUrl);
+        runPgDump(db, outputFile);
+
+        if (!Files.exists(outputFile) || Files.size(outputFile) == 0) {
+            throw new IOException("pg_dump produced empty or missing output file");
+        }
+    }
+
     private boolean isPgDumpAvailable() {
         try {
             Process p = new ProcessBuilder("pg_dump", "--version").start();

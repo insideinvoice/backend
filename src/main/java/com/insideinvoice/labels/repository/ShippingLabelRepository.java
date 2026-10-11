@@ -20,7 +20,8 @@ public interface ShippingLabelRepository extends JpaRepository<ShippingLabel, Lo
     boolean existsByBusinessIdAndLabelNumber(Long businessId, String labelNumber);
 
     /** All rows incl. soft-deleted — used by admin purge and label-file cleanup. */
-    List<Long> findIdByBusinessId(Long businessId);
+    @Query("SELECT s.id FROM ShippingLabel s WHERE s.businessId = :businessId")
+    List<Long> findIdByBusinessId(@Param("businessId") Long businessId);
 
     void deleteByBusinessId(Long businessId);
 
