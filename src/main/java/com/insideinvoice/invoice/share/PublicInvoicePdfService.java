@@ -260,6 +260,17 @@ public class PublicInvoicePdfService {
         c.text("QUANTITY", x[qtyIdx] + colW[qtyIdx] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
         c.text("RATE", x[rateIdx] + colW[rateIdx] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
         c.text("AMOUNT", x[amtIdx] + colW[amtIdx] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
+
+        // Draw vertical grid lines for header (will be extended by rows)
+        c.strokeRgb(30, 41, 59);
+        double[] xGrid = colX(showHnSac);
+        for (int i = 1; i < xGrid.length; i++) {
+            c.line(xGrid[i], y, xGrid[i], y + 7, 0.5);
+        }
+        // Outer border
+        c.line(M, y, M, y + 7, 0.5);
+        c.line(M + CONTENT_W, y, M + CONTENT_W, y + 7, 0.5);
+
         return y + 7;
     }
 

@@ -151,7 +151,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional(readOnly = true)
     public InvoiceResponse getInvoice(Long id, Long businessId) {
-        Invoice invoice = invoiceRepository.findByIdAndBusinessId(id, businessId)
+        Invoice invoice = invoiceRepository.findByIdAndBusinessIdWithItems(id, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
 
         String customerName = getCustomerName(invoice.getCustomerId(), businessId);
@@ -161,7 +161,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional(readOnly = true)
     public InvoiceResponse getInvoiceById(Long id) {
-        Invoice invoice = invoiceRepository.findById(id)
+        Invoice invoice = invoiceRepository.findByIdWithItems(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
 
         String customerName = customerRepository.findById(invoice.getCustomerId())

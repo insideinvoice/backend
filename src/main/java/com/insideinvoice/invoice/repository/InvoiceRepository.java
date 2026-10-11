@@ -25,6 +25,10 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     @Query("SELECT i FROM Invoice i LEFT JOIN FETCH i.items WHERE i.id = :id AND i.businessId = :businessId")
     Optional<Invoice> findByIdAndBusinessIdWithItems(@Param("id") Long id, @Param("businessId") Long businessId);
 
+    /** Join-fetches items so the collection is initialized without a caller-side transaction. */
+    @Query("SELECT i FROM Invoice i LEFT JOIN FETCH i.items WHERE i.id = :id")
+    Optional<Invoice> findByIdWithItems(@Param("id") Long id);
+
     /** Public lookup: only active shares resolve. NULL-safe (share_enabled is NOT NULL). */
     @Query("SELECT i FROM Invoice i WHERE i.shareToken = :token AND i.shareEnabled = true")
     Optional<Invoice> findActiveByShareToken(@Param("token") String token);
