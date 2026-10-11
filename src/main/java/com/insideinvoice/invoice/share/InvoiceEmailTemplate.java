@@ -249,7 +249,20 @@ public final class InvoiceEmailTemplate {
             .append(kvCell("Place of supply", notBlank(invoice.getPlaceOfSupply()) ? invoice.getPlaceOfSupply() : "\u2014", false))
             .append("</tr><tr>")
             .append(kvCell("Bill to", blankTo(safe(customer.getName()), "Customer"), true))
-            .append("</tr></table></td></tr>");
+            .append("</tr>");
+        // Reference / delivery / industry-extended rows (value- and
+        // industry-gated; same content as the invoice view and PDF).
+        List<InvoiceDetailRows.Row> detailRows = InvoiceDetailRows.rows(invoice, business);
+        for (int i = 0; i < detailRows.size(); i += 4) {
+            html.append("<tr>");
+            int end = Math.min(i + 4, detailRows.size());
+            for (int j = i; j < end; j++) {
+                InvoiceDetailRows.Row r = detailRows.get(j);
+                html.append(kvCell(r.label(), r.value(), false));
+            }
+            html.append("</tr>");
+        }
+        html.append("</table></td></tr>");
 
         // ---- items ----
         html.append("<tr><td class=\"px\" style=\"padding:24px 32px 0;font-family:").append(FONT).append(";")
@@ -483,6 +496,9 @@ public final class InvoiceEmailTemplate {
         if (notBlank(invoice.getPlaceOfSupply()))
             sb.append("Place of supply: ").append(invoice.getPlaceOfSupply()).append("\n");
         sb.append("Bill to: ").append(blankTo(safe(customer.getName()), "Customer")).append("\n");
+        for (InvoiceDetailRows.Row r : InvoiceDetailRows.rows(invoice, business)) {
+            sb.append(r.label()).append(": ").append(r.value()).append("\n");
+        }
         sb.append("\n");
 
         BigDecimal subtotal = nvl(invoice.getSubtotal());

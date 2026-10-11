@@ -151,6 +151,11 @@ public class PublicInvoicePdfService {
         metaY = metaRow(c, rightX, rightW, metaY, "Due Date", str(invoice.getDueDate()));
         metaY = metaRow(c, rightX, rightW, metaY, "Payment Mode", nz(invoice.getPaymentMode()));
         metaY = metaRow(c, rightX, rightW, metaY, "Place of Supply", nz(invoice.getPlaceOfSupply()));
+        // Reference / delivery / industry-extended rows (value- and
+        // industry-gated; same content as the invoice view and the email).
+        for (InvoiceDetailRows.Row row : InvoiceDetailRows.rows(invoice, b)) {
+            metaY = metaRow(c, rightX, rightW, metaY, row.label(), row.value());
+        }
 
         return Math.max(y, metaY) + 4;
     }

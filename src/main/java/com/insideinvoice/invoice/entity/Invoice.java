@@ -109,6 +109,53 @@ public class Invoice extends BaseEntity {
     @Column(name = "destination")
     private String destination;
 
+    /* ---- V29: industry-extended optional fields (Rental & Healthcare) ----
+     * Nullable, display/reference only — never part of totals or tax math.
+     * Only the owning industry's form exposes them; every other industry and
+     * all legacy invoices keep NULL and render exactly as before. */
+
+    @Column(name = "agreement_number", length = 100)
+    private String agreementNumber;
+
+    @Column(name = "asset_number", length = 100)
+    private String assetNumber;
+
+    @Column(name = "serial_number", length = 100)
+    private String serialNumber;
+
+    @Column(name = "vehicle_number", length = 60)
+    private String vehicleNumber;
+
+    @Column(name = "period_start")
+    private LocalDate periodStart;
+
+    @Column(name = "period_end")
+    private LocalDate periodEnd;
+
+    @Column(name = "billing_period_start")
+    private LocalDate billingPeriodStart;
+
+    @Column(name = "billing_period_end")
+    private LocalDate billingPeriodEnd;
+
+    @Column(name = "expected_return_date")
+    private LocalDate expectedReturnDate;
+
+    @Column(name = "deposit_reference", length = 100)
+    private String depositReference;
+
+    @Column(name = "patient_reference", length = 100)
+    private String patientReference;
+
+    @Column(name = "service_date")
+    private LocalDate serviceDate;
+
+    @Column(name = "treatment_reference", length = 100)
+    private String treatmentReference;
+
+    @Column(name = "referring_doctor", length = 150)
+    private String referringDoctor;
+
     @Column(name = "created_by", nullable = false)
     private Long createdBy;
 

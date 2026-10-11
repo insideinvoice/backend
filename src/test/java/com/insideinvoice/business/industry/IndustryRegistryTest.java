@@ -90,11 +90,13 @@ class IndustryRegistryTest {
     void labelKeysAreRealFields() {
         for (IndustryConfig config : IndustryRegistry.all()) {
             for (String key : config.labels().keySet()) {
-                assertTrue(IndustryField.ALL.contains(key),
+                assertTrue(IndustryField.ALL.contains(key)
+                                || IndustryExtendedFields.applies(config.industry(), key),
                         config.industry() + " relabels unknown field " + key);
             }
             for (String key : config.placeholders().keySet()) {
-                assertTrue(IndustryField.ALL.contains(key),
+                assertTrue(IndustryField.ALL.contains(key)
+                                || IndustryExtendedFields.applies(config.industry(), key),
                         config.industry() + " hints unknown field " + key);
             }
         }

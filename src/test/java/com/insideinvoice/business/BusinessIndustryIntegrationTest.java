@@ -131,6 +131,29 @@ class BusinessIndustryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("Rental and healthcare configs expose labels for V29 extended fields")
+    void extendedFieldLabelsAreServedWithTheConfig() throws Exception {
+        // The frontend prefers business.industryConfig over its local profile,
+        // so the served labels/placeholders must cover the extended fields too.
+        mockMvc.perform(put("/api/business/update")
+                        .header("Authorization", bearerFor(newbie))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"industry\":\"RENTAL\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.industryConfig.labels['agreementNumber']").value("Rental Agreement No."))
+                .andExpect(jsonPath("$.data.industryConfig.labels['periodStart']").value("Rental Period Start"))
+                .andExpect(jsonPath("$.data.industryConfig.placeholders['agreementNumber']").value("e.g. RA-2026-5566"));
+
+        mockMvc.perform(put("/api/business/update")
+                        .header("Authorization", bearerFor(newbie))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"industry\":\"HEALTHCARE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.industryConfig.labels['patientReference']").value("Patient / Customer ID"))
+                .andExpect(jsonPath("$.data.industryConfig.labels['referringDoctor']").value("Referring Doctor"));
+    }
+
+    @Test
     @DisplayName("An update that omits industry leaves the current one untouched")
     void updateWithoutIndustryKeepsCurrentSelection() throws Exception {
         mockMvc.perform(put("/api/business/update")

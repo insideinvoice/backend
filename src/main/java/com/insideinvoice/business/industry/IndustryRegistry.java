@@ -142,13 +142,29 @@ public final class IndustryRegistry {
         // --- Rental & Leasing -----------------------------------------------
         register(IndustryConfig.of(Industry.RENTAL,
                 Set.of(IndustryField.DISPATCH_DOC_NUMBER),
-                Map.of(
-                        IndustryField.DELIVERY_NOTE, "Handover Note",
-                        IndustryField.REFERENCE_NUMBER, "Rental / Asset Ref.",
-                        IndustryField.OTHER_REFERENCES, "Agreement / P.O. No."),
-                Map.of(
-                        IndustryField.REFERENCE_NUMBER, "e.g. Asset ID or agreement no.",
-                        IndustryField.OTHER_REFERENCES, "e.g. Rental agreement / customer PO"),
+                Map.ofEntries(
+                        Map.entry(IndustryField.DELIVERY_NOTE, "Handover Note"),
+                        Map.entry(IndustryField.REFERENCE_NUMBER, "Rental / Asset Ref."),
+                        Map.entry(IndustryField.OTHER_REFERENCES, "Agreement / P.O. No."),
+                        // V29 extended display fields (see IndustryExtendedFields)
+                        Map.entry(IndustryExtendedFields.AGREEMENT_NUMBER, "Rental Agreement No."),
+                        Map.entry(IndustryExtendedFields.ASSET_NUMBER, "Asset / Equipment ID"),
+                        Map.entry(IndustryExtendedFields.SERIAL_NUMBER, "Serial Number"),
+                        Map.entry(IndustryExtendedFields.VEHICLE_NUMBER, "Vehicle Reg. No."),
+                        Map.entry(IndustryExtendedFields.PERIOD_START, "Rental Period Start"),
+                        Map.entry(IndustryExtendedFields.PERIOD_END, "Rental Period End"),
+                        Map.entry(IndustryExtendedFields.BILLING_PERIOD_START, "Billing Period Start"),
+                        Map.entry(IndustryExtendedFields.BILLING_PERIOD_END, "Billing Period End"),
+                        Map.entry(IndustryExtendedFields.EXPECTED_RETURN_DATE, "Expected Return Date"),
+                        Map.entry(IndustryExtendedFields.DEPOSIT_REFERENCE, "Deposit Reference")),
+                Map.ofEntries(
+                        Map.entry(IndustryField.REFERENCE_NUMBER, "e.g. Asset ID or agreement no."),
+                        Map.entry(IndustryField.OTHER_REFERENCES, "e.g. Rental agreement / customer PO"),
+                        Map.entry(IndustryExtendedFields.AGREEMENT_NUMBER, "e.g. RA-2026-5566"),
+                        Map.entry(IndustryExtendedFields.ASSET_NUMBER, "e.g. CRANE-12"),
+                        Map.entry(IndustryExtendedFields.SERIAL_NUMBER, "e.g. SN-8899"),
+                        Map.entry(IndustryExtendedFields.VEHICLE_NUMBER, "e.g. KA-01-AB-1234"),
+                        Map.entry(IndustryExtendedFields.DEPOSIT_REFERENCE, "e.g. DEP-100")),
                 DocumentAccess.of(true, true, false)));
 
         // --- Telecom, IT & Subscriptions -------------------------------------
@@ -166,18 +182,28 @@ public final class IndustryRegistry {
                 DocumentAccess.of(false, false, false)));
 
         // --- Healthcare & Wellness Services ----------------------------------
-        // Only billing fields: no patient/medical data is collected or exposed.
+        // Billing/reference data only: no patient medical data is collected or exposed.
         register(IndustryConfig.of(Industry.HEALTHCARE,
                 Set.of(IndustryField.DELIVERY_NOTE, IndustryField.DELIVERY_NOTE_DATE,
                         IndustryField.DISPATCH_DOC_NUMBER, IndustryField.DISPATCHED_THROUGH,
                         IndustryField.TERMS_OF_DELIVERY, IndustryField.DESTINATION),
-                Map.of(
-                        IndustryField.REFERENCE_NUMBER, "Visit / Case Ref.",
-                        IndustryField.OTHER_REFERENCES, "Appointment / Order Ref.",
-                        IndustryField.ITEM_NAME, "Description of Services"),
-                Map.of(
-                        IndustryField.REFERENCE_NUMBER, "e.g. Visit or case reference",
-                        IndustryField.OTHER_REFERENCES, "e.g. Appointment or order number"),
+                Map.ofEntries(
+                        Map.entry(IndustryField.REFERENCE_NUMBER, "Visit / Case Ref."),
+                        Map.entry(IndustryField.OTHER_REFERENCES, "Appointment / Order Ref."),
+                        Map.entry(IndustryField.ITEM_NAME, "Description of Services"),
+                        // V29 extended display fields (see IndustryExtendedFields)
+                        Map.entry(IndustryExtendedFields.PATIENT_REFERENCE, "Patient / Customer ID"),
+                        Map.entry(IndustryExtendedFields.SERVICE_DATE, "Service Date"),
+                        Map.entry(IndustryExtendedFields.TREATMENT_REFERENCE, "Treatment / Session Ref."),
+                        Map.entry(IndustryExtendedFields.REFERRING_DOCTOR, "Referring Doctor"),
+                        Map.entry(IndustryExtendedFields.BILLING_PERIOD_START, "Billing Period Start"),
+                        Map.entry(IndustryExtendedFields.BILLING_PERIOD_END, "Billing Period End")),
+                Map.ofEntries(
+                        Map.entry(IndustryField.REFERENCE_NUMBER, "e.g. Visit or case reference"),
+                        Map.entry(IndustryField.OTHER_REFERENCES, "e.g. Appointment or order number"),
+                        Map.entry(IndustryExtendedFields.PATIENT_REFERENCE, "e.g. PAT-2211 (reference only, no medical data)"),
+                        Map.entry(IndustryExtendedFields.TREATMENT_REFERENCE, "e.g. Sess-14"),
+                        Map.entry(IndustryExtendedFields.REFERRING_DOCTOR, "e.g. Dr. Iyer")),
                 DocumentAccess.of(false, false, false)));
 
         // --- Education & Training --------------------------------------------

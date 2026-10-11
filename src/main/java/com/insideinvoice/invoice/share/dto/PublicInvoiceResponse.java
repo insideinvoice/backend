@@ -63,6 +63,22 @@ public class PublicInvoiceResponse {
     private String otherReferences;
     private String notes;
 
+    /** V29 industry-extended reference fields (Rental & Healthcare); null when unused. */
+    private String agreementNumber;
+    private String assetNumber;
+    private String serialNumber;
+    private String vehicleNumber;
+    private LocalDate periodStart;
+    private LocalDate periodEnd;
+    private LocalDate billingPeriodStart;
+    private LocalDate billingPeriodEnd;
+    private LocalDate expectedReturnDate;
+    private String depositReference;
+    private String patientReference;
+    private LocalDate serviceDate;
+    private String treatmentReference;
+    private String referringDoctor;
+
     private Seller seller;
     private Buyer buyer;
     private List<Item> items;

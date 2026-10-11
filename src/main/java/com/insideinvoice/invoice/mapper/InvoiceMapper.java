@@ -1,6 +1,7 @@
 package com.insideinvoice.invoice.mapper;
 
 import com.insideinvoice.invoice.dto.request.CreateInvoiceRequest;
+import com.insideinvoice.invoice.dto.request.InvoiceExtendedFields;
 import com.insideinvoice.invoice.dto.request.InvoiceItemRequest;
 import com.insideinvoice.invoice.dto.response.InvoiceItemResponse;
 import com.insideinvoice.invoice.dto.response.InvoiceResponse;
@@ -45,6 +46,8 @@ public class InvoiceMapper {
                 .createdBy(userId)
                 .build();
 
+        applyExtendedFields(invoice, request);
+
         List<InvoiceItem> items = request.getItems().stream()
                 .map(itemRequest -> toInvoiceItem(itemRequest, invoice))
                 .toList();
@@ -53,6 +56,28 @@ public class InvoiceMapper {
         calculateInvoiceTotals(invoice);
 
         return invoice;
+    }
+
+    /**
+     * Copies the V29 industry-extended reference fields (rental agreement,
+     * asset/vehicle identifiers, periods, healthcare references) from a create
+     * or update request onto the invoice. Display/reference only — no totals.
+     */
+    public static void applyExtendedFields(Invoice invoice, InvoiceExtendedFields request) {
+        invoice.setAgreementNumber(request.getAgreementNumber());
+        invoice.setAssetNumber(request.getAssetNumber());
+        invoice.setSerialNumber(request.getSerialNumber());
+        invoice.setVehicleNumber(request.getVehicleNumber());
+        invoice.setPeriodStart(request.getPeriodStart());
+        invoice.setPeriodEnd(request.getPeriodEnd());
+        invoice.setBillingPeriodStart(request.getBillingPeriodStart());
+        invoice.setBillingPeriodEnd(request.getBillingPeriodEnd());
+        invoice.setExpectedReturnDate(request.getExpectedReturnDate());
+        invoice.setDepositReference(request.getDepositReference());
+        invoice.setPatientReference(request.getPatientReference());
+        invoice.setServiceDate(request.getServiceDate());
+        invoice.setTreatmentReference(request.getTreatmentReference());
+        invoice.setReferringDoctor(request.getReferringDoctor());
     }
 
     public InvoiceItem toInvoiceItem(InvoiceItemRequest request, Invoice invoice) {
@@ -168,6 +193,20 @@ public class InvoiceMapper {
                 .termsOfDelivery(invoice.getTermsOfDelivery())
                 .otherReferences(invoice.getOtherReferences())
                 .destination(invoice.getDestination())
+                .agreementNumber(invoice.getAgreementNumber())
+                .assetNumber(invoice.getAssetNumber())
+                .serialNumber(invoice.getSerialNumber())
+                .vehicleNumber(invoice.getVehicleNumber())
+                .periodStart(invoice.getPeriodStart())
+                .periodEnd(invoice.getPeriodEnd())
+                .billingPeriodStart(invoice.getBillingPeriodStart())
+                .billingPeriodEnd(invoice.getBillingPeriodEnd())
+                .expectedReturnDate(invoice.getExpectedReturnDate())
+                .depositReference(invoice.getDepositReference())
+                .patientReference(invoice.getPatientReference())
+                .serviceDate(invoice.getServiceDate())
+                .treatmentReference(invoice.getTreatmentReference())
+                .referringDoctor(invoice.getReferringDoctor())
                 .paymentMode(invoice.getPaymentMode())
                 .discountPercent(invoice.getDiscountPercent())
                 .billingMode(invoice.getBillingMode() == null ? null : invoice.getBillingMode().name())

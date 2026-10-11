@@ -43,6 +43,21 @@ public class InvoiceResponse {
     private String termsOfDelivery;
     private String otherReferences;
     private String destination;
+    /** V29 industry-extended optional fields (Rental & Healthcare); null when unused. */
+    private String agreementNumber;
+    private String assetNumber;
+    private String serialNumber;
+    private String vehicleNumber;
+    private LocalDate periodStart;
+    private LocalDate periodEnd;
+    private LocalDate billingPeriodStart;
+    private LocalDate billingPeriodEnd;
+    private LocalDate expectedReturnDate;
+    private String depositReference;
+    private String patientReference;
+    private LocalDate serviceDate;
+    private String treatmentReference;
+    private String referringDoctor;
     private Long createdBy;
     private String paymentMode;
     /** Construction billing representation (COMPLETE_PROJECT / ITEMIZED); null = standard. */

@@ -19,7 +19,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreateInvoiceRequest {
+public class CreateInvoiceRequest implements InvoiceExtendedFields {
 
     @NotNull(message = "Customer ID is required")
     private Long customerId;
@@ -61,6 +61,45 @@ public class CreateInvoiceRequest {
     private String invoiceNumber;
 
     private String paymentMode;
+
+    /* ---- V29: industry-extended optional fields (Rental & Healthcare).
+     * All optional, reference/display only, never part of totals. ---- */
+
+    @Size(max = 100, message = "Agreement number must not exceed 100 characters")
+    private String agreementNumber;
+
+    @Size(max = 100, message = "Asset number must not exceed 100 characters")
+    private String assetNumber;
+
+    @Size(max = 100, message = "Serial number must not exceed 100 characters")
+    private String serialNumber;
+
+    @Size(max = 60, message = "Vehicle number must not exceed 60 characters")
+    private String vehicleNumber;
+
+    private LocalDate periodStart;
+
+    private LocalDate periodEnd;
+
+    private LocalDate billingPeriodStart;
+
+    private LocalDate billingPeriodEnd;
+
+    private LocalDate expectedReturnDate;
+
+    @Size(max = 100, message = "Deposit reference must not exceed 100 characters")
+    private String depositReference;
+
+    @Size(max = 100, message = "Patient reference must not exceed 100 characters")
+    private String patientReference;
+
+    private LocalDate serviceDate;
+
+    @Size(max = 100, message = "Treatment reference must not exceed 100 characters")
+    private String treatmentReference;
+
+    @Size(max = 150, message = "Referring doctor must not exceed 150 characters")
+    private String referringDoctor;
 
     /**
      * Construction billing representation: COMPLETE_PROJECT or ITEMIZED.

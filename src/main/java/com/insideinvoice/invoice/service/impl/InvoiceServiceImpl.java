@@ -6,6 +6,7 @@ import com.insideinvoice.customer.repository.CustomerRepository;
 import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
 import com.insideinvoice.invoice.dto.request.CreateInvoiceRequest;
+import com.insideinvoice.invoice.dto.request.InvoiceExtendedFields;
 import com.insideinvoice.invoice.dto.request.InvoiceItemRequest;
 import com.insideinvoice.invoice.dto.request.UpdateInvoiceRequest;
 import com.insideinvoice.invoice.dto.response.InvoiceResponse;
@@ -54,6 +55,8 @@ public class InvoiceServiceImpl implements InvoiceService {
     public InvoiceResponse createInvoice(CreateInvoiceRequest request, Long businessId, Long userId) {
         Customer customer = customerRepository.findByIdAndBusinessId(request.getCustomerId(), businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
+
+        validateExtendedDates(request);
 
         InvoiceType invoiceType;
         try {
@@ -173,6 +176,9 @@ public class InvoiceServiceImpl implements InvoiceService {
         Invoice invoice = invoiceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
 
+        validateExtendedDates(request);
+        InvoiceMapper.applyExtendedFields(invoice, request);
+
         Customer customer = customerRepository.findById(request.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
 
@@ -231,6 +237,9 @@ public class InvoiceServiceImpl implements InvoiceService {
         // concurrent payment can't have its status/totals overwritten by a stale edit.
         Invoice invoice = invoiceRepository.findByIdAndBusinessIdForUpdate(id, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
+
+        validateExtendedDates(request);
+        InvoiceMapper.applyExtendedFields(invoice, request);
 
         Customer customer = customerRepository.findByIdAndBusinessId(request.getCustomerId(), businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
@@ -328,6 +337,24 @@ public class InvoiceServiceImpl implements InvoiceService {
             throw new BadRequestException("Invoice number " + number + " already exists");
         }
         invoice.setInvoiceNumber(number);
+    }
+
+    /**
+     * V29 period validation: when both ends of a rental/service period (or a
+     * billing period) are supplied, the end must not precede the start. Only
+     * fires when both dates are present — single dates, blank fields and every
+     * legacy invoice are unaffected. Invoice date / due date are deliberately
+     * never used to infer rental duration.
+     */
+    private void validateExtendedDates(InvoiceExtendedFields request) {
+        if (request.getPeriodStart() != null && request.getPeriodEnd() != null
+                && request.getPeriodEnd().isBefore(request.getPeriodStart())) {
+            throw new BadRequestException("Period end date cannot be before the period start date");
+        }
+        if (request.getBillingPeriodStart() != null && request.getBillingPeriodEnd() != null
+                && request.getBillingPeriodEnd().isBefore(request.getBillingPeriodStart())) {
+            throw new BadRequestException("Billing period end date cannot be before the billing period start date");
+        }
     }
 
     private String getCustomerName(Long customerId, Long businessId) {
