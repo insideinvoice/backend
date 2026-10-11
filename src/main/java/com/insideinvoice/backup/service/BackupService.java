@@ -166,6 +166,11 @@ public class BackupService {
     }
 
     private void runPgDump(DatabaseConnectionParser.ParsedDatabase db, Path outputFile) throws IOException, InterruptedException {
+        // Verify pg_dump exists first
+        if (!isPgDumpAvailable()) {
+            throw new IOException("pg_dump not found in PATH. Install postgresql-client package.");
+        }
+
         List<String> command = new ArrayList<>();
         command.add("pg_dump");
         command.add("--host");
@@ -252,6 +257,15 @@ public class BackupService {
             return ZonedDateTime.parse(name, DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(IST));
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private boolean isPgDumpAvailable() {
+        try {
+            Process p = new ProcessBuilder("pg_dump", "--version").start();
+            return p.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
         }
     }
 }
