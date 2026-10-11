@@ -198,7 +198,6 @@ public class PublicInvoicePdfService {
     }
 
     private double drawItemsTable(PdfCanvas c, Invoice invoice, double y, boolean showHnSac) throws IOException {
-        double headerTop = y;
         y = tableHeader(c, y, showHnSac);
         int index = 0;
         for (InvoiceItem item : invoice.getItems()) {
@@ -210,10 +209,7 @@ public class PublicInvoicePdfService {
             }
             double rowH = Math.max(7.0, 2.2 + descLines.size() * 4.0);
             if (y + rowH > BOTTOM_SAFE) {
-                // Draw vertical grid lines for completed rows on this page before page break
-                drawVerticalGrid(c, showHnSac, headerTop, y + rowH);
                 y = startPage(c, "Invoice " + invoice.getInvoiceNumber() + " (continued)");
-                headerTop = y;
                 y = tableHeader(c, y, showHnSac);
             }
             boolean alt = index % 2 == 0;
@@ -237,38 +233,12 @@ public class PublicInvoicePdfService {
             c.text(num(item.getTaxableValue()), x[amtIdx] + colW[amtIdx] - 1.5, y + 1.6, 8, true, PdfCanvas.Align.RIGHT);
             c.strokeRgb(203, 213, 225);
             c.line(M, y + rowH, M + CONTENT_W, y + rowH, 0.2);
-            // Draw vertical grid lines for this row
-            double[] xGrid = colX(showHnSac);
-            for (int i = 1; i < xGrid.length; i++) {
-                c.line(xGrid[i], y, xGrid[i], y + rowH, 0.2);
-            }
-            // Outer borders for this row
-            c.line(M, y, M, y + rowH, 0.2);
-            c.line(M + CONTENT_W, y, M + CONTENT_W, y + rowH, 0.2);
             y += rowH;
         }
-        // Draw vertical grid lines from header through all rows on this page
-        drawVerticalGrid(c, showHnSac, headerTop, y);
-        // Outer border for entire table
-        c.strokeRgb(30, 41, 59);
-        c.line(M, headerTop, M, y, 0.4);
-        c.line(M + CONTENT_W, headerTop, M + CONTENT_W, y, 0.4);
         // close the table's top border look with a stronger bottom line
         c.strokeRgb(30, 41, 59);
         c.line(M, y, M + CONTENT_W, y, 0.4);
         return y + 3;
-    }
-
-    /** Draws vertical grid lines from headerTop to y for all column boundaries. */
-    private void drawVerticalGrid(PdfCanvas c, boolean showHnSac, double top, double bottom) throws IOException {
-        c.strokeRgb(30, 41, 59);
-        double[] xGrid = colX(showHnSac);
-        for (int i = 1; i < xGrid.length; i++) {
-            c.line(xGrid[i], top, xGrid[i], bottom, 0.2);
-        }
-        // Outer borders
-        c.line(M, top, M, bottom, 0.4);
-        c.line(M + CONTENT_W, top, M + CONTENT_W, bottom, 0.4);
     }
 
     private double tableHeader(PdfCanvas c, double y, boolean showHnSac) throws IOException {
