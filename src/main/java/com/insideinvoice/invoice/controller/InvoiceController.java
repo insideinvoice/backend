@@ -6,7 +6,9 @@ import com.insideinvoice.common.dto.PagedResponse;
 import com.insideinvoice.invoice.dto.request.CreateInvoiceRequest;
 import com.insideinvoice.invoice.dto.request.SendInvoiceEmailRequest;
 import com.insideinvoice.invoice.dto.request.UpdateInvoiceRequest;
+import com.insideinvoice.invoice.dto.response.ImportReport;
 import com.insideinvoice.invoice.dto.response.InvoiceResponse;
+import com.insideinvoice.invoice.service.InvoiceImportService;
 import com.insideinvoice.invoice.service.InvoiceService;
 import com.insideinvoice.invoice.share.InvoiceEmailService;
 import com.insideinvoice.invoice.share.InvoiceShareService;
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/invoices")
@@ -36,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
+    private final InvoiceImportService invoiceImportService;
     private final InvoiceShareService invoiceShareService;
     private final InvoiceEmailService invoiceEmailService;
 
@@ -61,6 +65,26 @@ public class InvoiceController {
         PagedResponse<InvoiceResponse> response = invoiceService.getAllInvoices(
                 currentUser.getBusinessId(), page, size, sortBy, sortDir);
         return ResponseEntity.ok(ApiResponse.success("Invoices retrieved successfully", response));
+    }
+
+    @PostMapping(value = "/import", consumes = { "multipart/form-data" })
+    @Operation(summary = "Bulk import invoices from an Excel workbook",
+            description = "Parses a multi-sheet workbook (Invoice Register + Invoice Items). "
+                    + "dryRun=true validates and returns a per-row report without writing; "
+                    + "dryRun=false commits in one transaction, recomputing totals server-side "
+                    + "and skipping duplicate invoice numbers.")
+    public ResponseEntity<ApiResponse<ImportReport>> importInvoices(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(defaultValue = "true") boolean dryRun,
+            @CurrentUser UserPrincipal currentUser) {
+        ImportReport report = dryRun
+                ? invoiceImportService.validate(file, currentUser.getBusinessId())
+                : invoiceImportService.commit(file, currentUser.getBusinessId(), currentUser.getId());
+        String message = dryRun
+                ? "Validation complete: " + report.getRows().size() + " rows checked"
+                : "Import complete: " + report.getImported() + " created, "
+                        + report.getSkipped() + " skipped, " + report.getBlocked() + " blocked";
+        return ResponseEntity.ok(ApiResponse.success(message, report));
     }
 
     @GetMapping("/{id}")

@@ -29,10 +29,12 @@ spring:
         default_batch_fetch_size: 50
   servlet:
     multipart:
-      # Aligned with the 1MB check in BusinessController.uploadSignature; oversized parts
-      # now fail at the container edge as MaxUploadSizeExceededException → 413.
-      max-file-size: 1MB
-      max-request-size: 2MB
+      # Signature upload enforces its own 1MB check inline (BusinessController);
+      # the container limit is raised here so the invoice bulk-import endpoint
+      # can accept larger .xlsx workbooks. Oversized parts still fail at the
+      # container edge as MaxUploadSizeExceededException -> 413.
+      max-file-size: 10MB
+      max-request-size: 15MB
   flyway:
     enabled: true
     baseline-on-migrate: true

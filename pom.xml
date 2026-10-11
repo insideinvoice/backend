@@ -79,6 +79,12 @@
             <version>3.5.3</version>
             <scope>test</scope>
         </dependency>
+        <!-- Excel parsing for the invoice bulk-import endpoint -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.2.5</version>
+        </dependency>
 
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
