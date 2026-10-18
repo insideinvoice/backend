@@ -19,8 +19,9 @@ import java.util.List;
  * fallback. The header brands the sender's business ("Acme Enterprise"), while the
  * footer makes clear the message is delivered by Inside Invoice.
  *
- * <p>Design: full-width header/footer bands with a 720px content column, hero
- * "Amount due" block with a bulletproof CTA, key/value details grid, an items
+ * <p>Design: full-width header/footer bands with a 720px content column, a
+ * full-bleed "Amount due" hero band with a single-line bulletproof CTA,
+ * key/value details grid, an items
  * table that collapses into stacked cards under 600px, and a right-aligned
  * totals block that includes the invoice-level discount. Everything is
  * table-based, inline-styled email HTML (Gmail, Outlook, Apple Mail, Yahoo)
@@ -119,17 +120,26 @@ public final class InvoiceEmailTemplate {
             .append("  @media only screen and (max-width:600px){\n")
             .append("    .container{width:100%!important;max-width:100%!important;}\n")
             .append("    .card{border-radius:0!important;border-left:0!important;border-right:0!important;}\n")
+            .append("    .hero-band{border-radius:0!important;}\n")
             .append("    .px{padding-left:16px!important;padding-right:16px!important;}\n")
-            .append("    .hero-cta{display:block!important;text-align:center!important;padding-top:16px!important;}\n")
+            .append("    .hero-main{display:block!important;width:100%!important;box-sizing:border-box!important;padding:20px 16px 0!important;}\n")
+            .append("    .hero-cta{display:block!important;width:100%!important;box-sizing:border-box!important;text-align:center!important;")
+            .append("padding:16px 16px 22px!important;white-space:normal!important;}\n")
+            .append("    .hero-cta table{width:100%!important;}\n")
+            .append("    .hero-cta p{text-align:center!important;}\n")
             .append("    .kv-cell{display:inline-block!important;width:50%!important;box-sizing:border-box!important;}\n")
             .append("    .kv-wide{width:100%!important;}\n")
             .append("    .items thead{display:none!important;}\n")
             .append("    .items tbody,.items tr,.items td{display:block!important;width:100%!important;}\n")
             .append("    .items tr{padding:12px 0!important;border-bottom:1px solid ").append(ROW_LINE).append(";}\n")
-            .append("    .c-sno,.c-qty,.c-rate,.c-gst{display:none!important;}\n")
-            .append("    .c-item{padding:0!important;border-top:0!important;}\n")
+            .append("    .items td.c-qty,.items td.c-rate,.items td.c-gst{display:none!important;}\n")
+            .append("    .items td.c-sno{display:inline-block!important;width:8%!important;box-sizing:border-box!important;")
+            .append("padding:0 8px 0 0!important;border-top:0!important;vertical-align:top;}\n")
+            .append("    .items td.c-item{display:inline-block!important;width:92%!important;box-sizing:border-box!important;")
+            .append("padding:0!important;border-top:0!important;vertical-align:top;}\n")
             .append("    .m-only{display:block!important;}\n")
             .append("    .c-amt{padding:6px 0 0!important;border-top:0!important;text-align:right!important;}\n")
+            .append("    td,p,a{overflow-wrap:break-word;word-break:break-word;}\n")
             .append("    .totals{max-width:100%!important;}\n")
             .append("  }\n")
             .append("</style>\n</head>\n")
@@ -164,13 +174,19 @@ public final class InvoiceEmailTemplate {
                 .append("\" style=\"display:block;height:40px;width:auto;max-height:40px;border:0;border-radius:8px;\">")
                 .append("</td>");
         }
-        html.append("<td valign=\"middle\" style=\"font-family:").append(FONT).append(";font-size:20px;")
+        // Business name fills the remaining space via table auto-layout (no
+        // width:100% hint — a percentage cell + the nowrap pill overflows the
+        // table past the viewport on mobile). The pill cell kills its line-box
+        // strut (font-size:0) so the inline-block pill centres exactly against
+        // the name instead of riding high on the strut baseline.
+        html.append("<td valign=\"middle\" style=\"padding-right:16px;font-family:")
+            .append(FONT).append(";font-size:20px;")
             .append("font-weight:700;color:").append(INK).append(";line-height:1.3;\">")
             .append(esc(businessName)).append("</td>")
-            .append("<td valign=\"middle\" align=\"right\">")
-            .append("<span style=\"display:inline-block;background-color:").append(PILL_BG).append(";color:").append(INDIGO)
+            .append("<td valign=\"middle\" align=\"right\" style=\"font-size:0;line-height:0;white-space:nowrap;\">")
+            .append("<span style=\"display:inline-block;vertical-align:middle;background-color:").append(PILL_BG).append(";color:").append(INDIGO)
             .append(";font-size:11px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;")
-            .append("padding:6px 12px;border-radius:999px;\">").append(esc(typeLabel)).append("</span>")
+            .append("padding:10px 16px;border-radius:999px;\">").append(esc(typeLabel)).append("</span>")
             .append("</td></tr></table>");
 
         String address = businessAddressLine(business);
@@ -191,20 +207,28 @@ public final class InvoiceEmailTemplate {
         // ---- spacer ----
         html.append("<tr><td height=\"24\" style=\"height:24px;line-height:24px;font-size:0;\">&nbsp;</td></tr>");
 
-        // ---- content card ----
-        html.append("<tr><td align=\"center\" class=\"px\" style=\"padding:0 16px;\">")
+        // ---- content card: full-width (no side padding), like the header band ----
+        html.append("<tr><td align=\"center\" style=\"padding:0;\">")
             .append("<table role=\"presentation\" width=\"720\" class=\"container card\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"")
             .append(" bgcolor=\"").append(CARD).append("\"")
             .append(" style=\"width:720px;max-width:720px;background-color:").append(CARD)
             .append(";border:1px solid ").append(BORDER).append(";border-radius:8px;\">");
 
-        // ---- hero: amount due + primary CTA ----
-        html.append("<tr><td class=\"px\" style=\"padding:28px 32px 4px;\">")
-            .append("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>")
-            .append("<td valign=\"top\" style=\"font-family:").append(FONT).append(";\">")
+        // ---- hero: full-bleed amount-due band + primary CTA ----
+        // The band spans the entire card width (no left/right inset): amount
+        // locked to 60% on the left, CTA right. nowrap at every level keeps
+        // "View Invoice" on one line; a fixed-width amount cell stops the
+        // button from squeezing it narrow.
+        html.append("<tr><td style=\"padding:0;\">")
+            .append("<table role=\"presentation\" width=\"100%\" class=\"hero-band\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"")
+            .append(" bgcolor=\"").append(TH_BG).append("\"")
+            .append(" style=\"width:100%;background-color:").append(TH_BG)
+            .append(";border-bottom:1px solid ").append(BORDER).append(";border-radius:8px 8px 0 0;\"><tr>")
+            .append("<td valign=\"middle\" class=\"hero-main\" width=\"60%\"")
+            .append(" style=\"width:60%;padding:26px 16px 26px 32px;font-family:").append(FONT).append(";\">")
             .append("<p style=\"margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:0.8px;")
             .append("text-transform:uppercase;color:").append(MUTED).append(";\">Amount due</p>")
-            .append("<p style=\"margin:0;font-size:28px;line-height:1.15;font-weight:700;color:").append(INK).append(";")
+            .append("<p style=\"margin:0;font-size:30px;line-height:1.15;font-weight:700;color:").append(INK).append(";")
             .append("letter-spacing:-0.4px;\">&#8377;").append(inr(grand)).append("</p>");
         if (invoice.getDueDate() != null) {
             html.append("<p style=\"margin:6px 0 0;font-size:13px;color:").append(MUTED).append(";\">Due ")
@@ -213,15 +237,17 @@ public final class InvoiceEmailTemplate {
         html.append("</td>");
 
         // Bulletproof button (table cell + padding renders in Outlook).
-        html.append("<td valign=\"top\" align=\"right\" class=\"hero-cta\">")
+        html.append("<td valign=\"middle\" align=\"right\" class=\"hero-cta\"")
+            .append(" style=\"padding:26px 20px 26px 16px;white-space:nowrap;\">")
             .append("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"border-collapse:separate;\"><tr>")
             .append("<td align=\"center\" bgcolor=\"").append(INDIGO).append("\"")
-            .append(" style=\"background-color:").append(INDIGO).append(";border-radius:6px;\">")
+            .append(" style=\"background-color:").append(INDIGO).append(";border-radius:6px;white-space:nowrap;\">")
             .append("<a href=\"").append(esc(shareUrl)).append("\"")
             .append(" style=\"display:inline-block;padding:0 28px;line-height:44px;font-family:").append(FONT).append(";")
-            .append("font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;\">View Invoice</a>")
+            .append("font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;")
+            .append("white-space:nowrap;\">View Invoice</a>")
             .append("</td></tr></table>")
-            .append("<p style=\"margin:10px 0 0;font-size:12px;color:").append(SUBTLE).append(";\">")
+            .append("<p style=\"margin:10px 0 0;font-size:12px;color:").append(SUBTLE).append(";text-align:right;\">")
             .append("<a href=\"").append(esc(shareUrl)).append("\" style=\"color:").append(MUTED)
             .append(";text-decoration:underline;\">Open in browser</a></p>")
             .append("</td></tr></table></td></tr>");
