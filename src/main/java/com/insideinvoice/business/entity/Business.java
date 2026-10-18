@@ -117,4 +117,20 @@ public class Business extends BaseEntity {
     @Column(name = "show_hsn_sac", nullable = false)
     @Builder.Default
     private Boolean showHnSac = true;
+
+    /**
+     * Company seal/stamp preference. Stored on the business (not the browser)
+     * so the emailed invoice and the public share page — both rendered by the
+     * server, the latter on the customer's device — show the same seal the
+     * owner sees when downloading. FALSE (DB default) keeps every existing
+     * business seal-free until explicitly enabled.
+     */
+    @Column(name = "seal_enabled", nullable = false)
+    @Builder.Default
+    private Boolean sealEnabled = false;
+
+    /** Seal variant: "round" (round seal) or "stamp" (rubber stamp). */
+    @Column(name = "seal_type", length = 20, nullable = false)
+    @Builder.Default
+    private String sealType = "round";
 }

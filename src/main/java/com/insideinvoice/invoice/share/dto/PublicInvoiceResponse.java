@@ -104,6 +104,14 @@ public class PublicInvoiceResponse {
         private Boolean specialistInEnabled;
         /** Display-only HSN/SAC switch, mirrored here so public templates can read it from the seller block. */
         private Boolean showHnSac;
+        /**
+         * Company seal/stamp preference. The share page is opened on the
+         * customer's device, which has none of the owner's localStorage, so the
+         * seal has to travel with the payload to match what the owner downloads.
+         */
+        private Boolean sealEnabled;
+        /** Seal variant: "round" or "stamp". */
+        private String sealType;
         private String signature;
         private String industry;
         private PaymentInstructions payment;

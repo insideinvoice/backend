@@ -4,6 +4,7 @@ import com.insideinvoice.business.entity.Business;
 import com.insideinvoice.business.repository.BusinessRepository;
 import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.customer.repository.CustomerRepository;
+import com.insideinvoice.email.EmailAttachment;
 import com.insideinvoice.email.EmailService;
 import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
@@ -30,6 +31,9 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class InvoiceEmailService {
 
+    /** Cap on the client-rendered PDF attachment; anything larger is dropped. */
+    private static final long MAX_PDF_BYTES = 10 * 1024 * 1024; // 10 MB
+
     private final InvoiceRepository invoiceRepository;
     private final CustomerRepository customerRepository;
     private final BusinessRepository businessRepository;
@@ -46,6 +50,18 @@ public class InvoiceEmailService {
      * @return the recipient address the invoice was sent to
      */
     public String sendInvoiceEmail(Long invoiceId, Long businessId, String frontendOrigin) {
+        return sendInvoiceEmail(invoiceId, businessId, frontendOrigin, null, null);
+    }
+
+    /**
+     * @param pdfAttachment optional client-rendered PDF of the invoice (seal/stamp
+     *                      already applied by the browser). When present it is
+     *                      attached so the emailed document is byte-identical to
+     *                      what the user downloads.
+     * @return the recipient address the invoice was sent to
+     */
+    public String sendInvoiceEmail(Long invoiceId, Long businessId, String frontendOrigin,
+                                   byte[] pdfAttachment, String pdfFilename) {
         Invoice invoice = invoiceRepository.findByIdAndBusinessIdWithItems(invoiceId, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
 
@@ -69,12 +85,53 @@ public class InvoiceEmailService {
                 InvoiceEmailTemplate.build(invoice, customer, business, shareUrl, sellerLogoUrl);
 
         String fromName = safeName(business.getBusinessName()) + " via Inside Invoice";
-        emailService.sendHtmlEmail(fromName, customer.getEmail().trim(),
-                content.subject(), content.html(), content.text(),
-                notBlank(business.getEmail()) ? business.getEmail().trim() : null);
+        EmailAttachment attachment = toPdfAttachment(pdfAttachment, pdfFilename, invoice.getInvoiceNumber());
+        if (attachment != null) {
+            emailService.sendHtmlEmail(fromName, customer.getEmail().trim(),
+                    content.subject(), content.html(), content.text(),
+                    notBlank(business.getEmail()) ? business.getEmail().trim() : null, attachment);
+        } else {
+            emailService.sendHtmlEmail(fromName, customer.getEmail().trim(),
+                    content.subject(), content.html(), content.text(),
+                    notBlank(business.getEmail()) ? business.getEmail().trim() : null);
+        }
 
-        log.info("Invoice email sent | invoice: {} | to: {}", invoice.getInvoiceNumber(), customer.getEmail());
+        log.info("Invoice email sent | invoice: {} | to: {} | attachment: {}",
+                invoice.getInvoiceNumber(), customer.getEmail(), attachment != null);
         return customer.getEmail().trim();
+    }
+
+    /**
+     * The attachment is generated in the browser and posted by an authenticated
+     * user, so it is validated before it is trusted: it must actually be a PDF
+     * (magic bytes) and stay under the size cap. A bad upload is dropped rather
+     * than failing the send — the email (with its share link) must still go out.
+     */
+    private EmailAttachment toPdfAttachment(byte[] pdf, String filename, String invoiceNumber) {
+        if (pdf == null || pdf.length == 0) return null;
+        if (pdf.length > MAX_PDF_BYTES) {
+            log.warn("Invoice PDF attachment too large ({} bytes), sending email without it", pdf.length);
+            return null;
+        }
+        if (pdf.length < 5 || pdf[0] != '%' || pdf[1] != 'P' || pdf[2] != 'D' || pdf[3] != 'F') {
+            log.warn("Invoice PDF attachment failed the PDF magic-byte check, sending email without it");
+            return null;
+        }
+        return EmailAttachment.pdf(sanitizeFilename(filename, invoiceNumber), pdf);
+    }
+
+    /**
+     * Strips anything that could break out of the MIME filename header
+     * (path separators, control characters) and guarantees a .pdf suffix.
+     */
+    static String sanitizeFilename(String filename, String invoiceNumber) {
+        String fallback = "Invoice_" + (invoiceNumber == null ? "document" : invoiceNumber) + ".pdf";
+        if (filename == null || filename.isBlank()) return fallback;
+        String cleaned = filename.replaceAll("[\\\\/\\r\\n\\t]", "_")
+                .replaceAll("[^A-Za-z0-9._ -]", "")
+                .trim();
+        if (cleaned.isBlank() || cleaned.equals(".") || cleaned.equals("..")) return fallback;
+        return cleaned.toLowerCase().endsWith(".pdf") ? cleaned : cleaned + ".pdf";
     }
 
     /**

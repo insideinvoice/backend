@@ -101,6 +101,15 @@ public class BusinessServiceImpl implements BusinessService {
         if (request.getShowHnSac() != null) {
             business.setShowHnSac(request.getShowHnSac());
         }
+        // Company seal/stamp: null = leave unchanged. The type is normalised to
+        // the two supported variants so an unexpected value can never reach the
+        // document renderers (which branch on "round" vs anything else).
+        if (request.getSealEnabled() != null) {
+            business.setSealEnabled(request.getSealEnabled());
+        }
+        if (request.getSealType() != null && !request.getSealType().isBlank()) {
+            business.setSealType("stamp".equalsIgnoreCase(request.getSealType().trim()) ? "stamp" : "round");
+        }
 
         business = businessRepository.save(business);
         log.info("Business updated: {}", businessId);

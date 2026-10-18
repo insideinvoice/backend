@@ -44,6 +44,12 @@ public class BusinessResponse {
     private String industry;
     /** Display-only HSN/SAC visibility; never affects stored codes or taxes. */
     private Boolean showHnSac;
+
+    /** Whether the company seal/stamp is rendered on documents and share pages. */
+    private Boolean sealEnabled;
+
+    /** Seal variant: "round" or "stamp". */
+    private String sealType;
     /** Resolved configuration for {@link #industry} — same package, no import needed. */
     private IndustryConfigResponse industryConfig;
     private LocalDateTime createdAt;

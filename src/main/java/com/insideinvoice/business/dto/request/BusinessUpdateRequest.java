@@ -73,4 +73,17 @@ public class BusinessUpdateRequest {
      * stored codes and GST calculations are unaffected. Null = leave unchanged.
      */
     private Boolean showHnSac;
+
+    /**
+     * Enable (TRUE) or disable (FALSE) the company seal/stamp on invoice
+     * documents and public share pages. Null = leave unchanged.
+     */
+    private Boolean sealEnabled;
+
+    /**
+     * Seal variant: "round" (round seal) or "stamp" (rubber stamp).
+     * Null = leave unchanged.
+     */
+    @Size(max = 20, message = "Seal type must not exceed 20 characters")
+    private String sealType;
 }

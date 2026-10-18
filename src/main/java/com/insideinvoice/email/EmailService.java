@@ -75,13 +75,24 @@ public class EmailService {
      * @param fromName display name for the From header, e.g. the user's business name
      */
     public void sendHtmlEmail(String fromName, String toEmail, String subject, String htmlContent, String textContent, String replyTo) {
+        sendHtmlEmail(fromName, toEmail, subject, htmlContent, textContent, replyTo, null);
+    }
+
+    /**
+     * As {@link #sendHtmlEmail(String, String, String, String, String, String)}
+     * but with an optional attachment. Used to send the customer the exact PDF
+     * the app rendered (seal/stamp included) so the emailed document matches
+     * what the user downloads.
+     */
+    public void sendHtmlEmail(String fromName, String toEmail, String subject, String htmlContent, String textContent, String replyTo, EmailAttachment attachment) {
         if (resolveApiKey(resendApiKey).isEmpty()) {
             throw new EmailDeliveryException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Email sending is not configured on this server");
         }
         try {
-            sendViaResend(fromName, toEmail, subject, htmlContent, textContent, replyTo);
-            log.info("Email sent via Resend | from: {} <{}> | to: {} | subject: {}", fromName, mailFrom, toEmail, subject);
+            sendViaResend(fromName, toEmail, subject, htmlContent, textContent, replyTo, attachment);
+            log.info("Email sent via Resend | from: {} <{}> | to: {} | subject: {} | attachment: {}",
+                    fromName, mailFrom, toEmail, subject, attachment != null ? attachment.filename() : "none");
         } catch (EmailDeliveryException e) {
             throw e;
         } catch (Exception e) {
@@ -136,6 +147,10 @@ public class EmailService {
     }
 
     private void sendViaResend(String fromName, String toEmail, String subject, String htmlContent, String textContent, String replyTo) throws Exception {
+        sendViaResend(fromName, toEmail, subject, htmlContent, textContent, replyTo, null);
+    }
+
+    private void sendViaResend(String fromName, String toEmail, String subject, String htmlContent, String textContent, String replyTo, EmailAttachment attachment) throws Exception {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("from", sanitizeFromName(fromName) + " <" + mailFrom + ">");
         body.put("to", new String[]{toEmail});
@@ -144,6 +159,14 @@ public class EmailService {
         body.put("text", textContent);
         if (replyTo != null && !replyTo.isBlank()) {
             body.put("reply_to", replyTo);
+        }
+        if (attachment != null && attachment.content() != null && attachment.content().length > 0) {
+            // Resend expects base64-encoded content with an explicit filename.
+            body.put("attachments", java.util.List.of(Map.of(
+                    "filename", attachment.filename(),
+                    "content", java.util.Base64.getEncoder().encodeToString(attachment.content()),
+                    "mime_type", attachment.mimeType() == null ? "application/octet-stream" : attachment.mimeType()
+            )));
         }
         body.put("headers", Map.of(
                 "X-Entity-Ref-ID", UUID.randomUUID().toString(),

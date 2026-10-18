@@ -13,7 +13,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
 
 import java.util.UUID;
 
@@ -22,7 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -55,10 +54,9 @@ class InvoiceEmailTest extends BaseIntegrationTest {
     @Test
     @DisplayName("Owner sends: 200, correct recipient, branded subject, link + GST breakup in HTML")
     void ownerSendsInvoiceEmail() throws Exception {
-        mockMvc.perform(post("/api/invoices/" + invoice.getId() + "/email")
+        mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
                         .header("Authorization", bearerFor(owner))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"frontendOrigin\":\"" + ORIGIN + "\"}"))
+                        .param("frontendOrigin", ORIGIN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("Invoice email sent to " + customer.getEmail()));
@@ -98,7 +96,7 @@ class InvoiceEmailTest extends BaseIntegrationTest {
     @Test
     @DisplayName("No body: falls back to the configured frontend base URL")
     void noBodyUsesConfiguredOrigin() throws Exception {
-        mockMvc.perform(post("/api/invoices/" + invoice.getId() + "/email")
+        mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
                         .header("Authorization", bearerFor(owner)))
                 .andExpect(status().isOk());
 
@@ -113,10 +111,9 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         ShareLinkResponse revoked = invoiceShareService.revoke(invoice.getId(), owner.getBusinessId());
         assertThat(revoked.getToken()).isNull();
 
-        mockMvc.perform(post("/api/invoices/" + invoice.getId() + "/email")
+        mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
                         .header("Authorization", bearerFor(owner))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"frontendOrigin\":\"" + ORIGIN + "\"}"))
+                        .param("frontendOrigin", ORIGIN))
                 .andExpect(status().isOk());
 
         Invoice reloaded = invoiceRepository.findById(invoice.getId()).orElseThrow();
@@ -134,10 +131,8 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         customer.setEmail(null);
         customerRepository.save(customer);
 
-        mockMvc.perform(post("/api/invoices/" + invoice.getId() + "/email")
-                        .header("Authorization", bearerFor(owner))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+        mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
+                        .header("Authorization", bearerFor(owner)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("no email address")));
@@ -151,10 +146,8 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         String run = UUID.randomUUID().toString().substring(0, 8);
         User attacker = makeUser("mailattacker-" + run, Role.USER);
 
-        mockMvc.perform(post("/api/invoices/" + invoice.getId() + "/email")
-                        .header("Authorization", bearerFor(attacker))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+        mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
+                        .header("Authorization", bearerFor(attacker)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false));
 
@@ -164,24 +157,64 @@ class InvoiceEmailTest extends BaseIntegrationTest {
     @Test
     @DisplayName("Anonymous send is 401")
     void anonymousSendIs401() throws Exception {
-        mockMvc.perform(post("/api/invoices/" + invoice.getId() + "/email")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+        mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email"))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
     @DisplayName("Invalid frontend origin is 400, no link is created, nothing is sent")
     void invalidOriginIs400() throws Exception {
-        mockMvc.perform(post("/api/invoices/" + invoice.getId() + "/email")
+        mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
                         .header("Authorization", bearerFor(owner))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"frontendOrigin\":\"javascript:alert(1)\"}"))
+                        .param("frontendOrigin", "javascript:alert(1)"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Invalid frontend origin")));
 
         Invoice reloaded = invoiceRepository.findById(invoice.getId()).orElseThrow();
         assertThat(reloaded.getShareEnabled()).isFalse();
         verify(emailService, never()).sendHtmlEmail(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Uploaded invoice PDF is attached so the emailed doc matches the download (seal included)")
+    void uploadedPdfIsAttached() throws Exception {
+        // The browser renders the PDF with the seal/stamp applied and uploads it.
+        byte[] pdf = "%PDF-1.7 fake invoice bytes".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+
+        mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
+                        .file(new org.springframework.mock.web.MockMultipartFile(
+                                "pdf", "Tax_Invoice_" + invoice.getInvoiceNumber() + ".pdf",
+                                "application/pdf", pdf))
+                        .header("Authorization", bearerFor(owner))
+                        .param("frontendOrigin", ORIGIN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        ArgumentCaptor<com.insideinvoice.email.EmailAttachment> attachment =
+                ArgumentCaptor.forClass(com.insideinvoice.email.EmailAttachment.class);
+        verify(emailService, times(1)).sendHtmlEmail(
+                any(), any(), any(), any(), any(), any(), attachment.capture());
+
+        assertThat(attachment.getValue().filename())
+                .isEqualTo("Tax_Invoice_" + invoice.getInvoiceNumber() + ".pdf");
+        assertThat(attachment.getValue().mimeType()).isEqualTo("application/pdf");
+        assertThat(attachment.getValue().content()).isEqualTo(pdf);
+    }
+
+    @Test
+    @DisplayName("A non-PDF upload is dropped — the email still sends, without the bad attachment")
+    void nonPdfUploadIsDropped() throws Exception {
+        byte[] notPdf = "not a pdf at all".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+
+        mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
+                        .file(new org.springframework.mock.web.MockMultipartFile(
+                                "pdf", "evil.pdf", "application/pdf", notPdf))
+                        .header("Authorization", bearerFor(owner))
+                        .param("frontendOrigin", ORIGIN))
+                .andExpect(status().isOk());
+
+        // Falls back to the 6-arg overload: no attachment reached the mailer.
+        verify(emailService, times(1)).sendHtmlEmail(any(), any(), any(), any(), any(), any());
+        verify(emailService, never()).sendHtmlEmail(any(), any(), any(), any(), any(), any(), any());
     }
 }

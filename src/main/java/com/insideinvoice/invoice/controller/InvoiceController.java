@@ -4,7 +4,6 @@ import com.insideinvoice.auth.dto.response.ApiResponse;
 import com.insideinvoice.common.Constants;
 import com.insideinvoice.common.dto.PagedResponse;
 import com.insideinvoice.invoice.dto.request.CreateInvoiceRequest;
-import com.insideinvoice.invoice.dto.request.SendInvoiceEmailRequest;
 import com.insideinvoice.invoice.dto.request.UpdateInvoiceRequest;
 import com.insideinvoice.invoice.dto.response.ImportReport;
 import com.insideinvoice.invoice.dto.response.InvoiceResponse;
@@ -29,6 +28,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -142,14 +142,20 @@ public class InvoiceController {
         return ResponseEntity.ok(ApiResponse.success("New share link created", response));
     }
 
-    @PostMapping("/{id}/email")
-    @Operation(summary = "Email the invoice and its share link to the customer")
+    @PostMapping(value = "/{id}/email", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Email the invoice, its PDF and its share link to the customer")
     public ResponseEntity<ApiResponse<Void>> sendInvoiceEmail(
             @PathVariable Long id,
-            @RequestBody(required = false) SendInvoiceEmailRequest request,
-            @CurrentUser UserPrincipal currentUser) {
+            @RequestParam(name = "frontendOrigin", required = false) String frontendOrigin,
+            @RequestPart(name = "pdf", required = false) MultipartFile pdf,
+            @CurrentUser UserPrincipal currentUser) throws java.io.IOException {
+        // The PDF is rendered in the browser (seal/stamp included) and attached so
+        // the emailed document matches what the user downloads. Optional: a missing
+        // or invalid file still sends the email with its share link.
+        byte[] pdfBytes = (pdf != null && !pdf.isEmpty()) ? pdf.getBytes() : null;
         String recipient = invoiceEmailService.sendInvoiceEmail(
-                id, currentUser.getBusinessId(), request != null ? request.getFrontendOrigin() : null);
+                id, currentUser.getBusinessId(), frontendOrigin,
+                pdfBytes, pdf != null ? pdf.getOriginalFilename() : null);
         return ResponseEntity.ok(ApiResponse.success("Invoice email sent to " + recipient));
     }
 }

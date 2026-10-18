@@ -143,6 +143,8 @@ public class PublicInvoiceAssembler {
                 .specialistIn(b.getSpecialistIn())
                 .specialistInEnabled(b.getSpecialistInEnabled())
                 .showHnSac(b.getShowHnSac() == null || b.getShowHnSac())
+                .sealEnabled(b.getSealEnabled() != null && b.getSealEnabled())
+                .sealType(b.getSealType() == null || b.getSealType().isBlank() ? "round" : b.getSealType())
                 .signature(b.getSignature())
                 .industry(b.getIndustry())
                 .payment(PublicInvoiceResponse.PaymentInstructions.builder()
