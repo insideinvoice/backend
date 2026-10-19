@@ -123,6 +123,11 @@ public class PublicInvoiceResponse {
         private String jurisdictionRegion;
         /** City/location printed in the jurisdiction footer. */
         private String jurisdictionCity;
+        /** Base64 company logo; null keeps every surface's default fallback.
+         * Mirrored here so shared invoices render the same letterhead the
+         * owner downloads — the share page runs on the customer's device
+         * with no access to the owner's session data. */
+        private String logo;
         private String signature;
         private String industry;
         private PaymentInstructions payment;

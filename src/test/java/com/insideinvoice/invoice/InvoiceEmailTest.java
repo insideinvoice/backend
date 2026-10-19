@@ -18,6 +18,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -67,7 +68,7 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> fromName = ArgumentCaptor.forClass(String.class);
         verify(emailService, times(1)).sendHtmlEmail(
-                fromName.capture(), to.capture(), subject.capture(), html.capture(), text.capture(), any());
+                fromName.capture(), to.capture(), subject.capture(), html.capture(), text.capture(), any(), anyList());
 
         // From brands the user's business; delivery is via Inside Invoice.
         assertThat(fromName.getValue()).contains(owner.getName() + " Co").contains("via Inside Invoice");
@@ -101,7 +102,7 @@ class InvoiceEmailTest extends BaseIntegrationTest {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
-        verify(emailService, times(1)).sendHtmlEmail(any(), any(), any(), html.capture(), any(), any());
+        verify(emailService, times(1)).sendHtmlEmail(any(), any(), any(), html.capture(), any(), any(), anyList());
         assertThat(html.getValue()).contains("https://insideinvoice.in/i/");
     }
 
@@ -121,7 +122,7 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         assertThat(reloaded.getShareToken()).isNotBlank();
 
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
-        verify(emailService, times(1)).sendHtmlEmail(any(), any(), any(), html.capture(), any(), any());
+        verify(emailService, times(1)).sendHtmlEmail(any(), any(), any(), html.capture(), any(), any(), anyList());
         assertThat(html.getValue()).contains("/i/" + reloaded.getShareToken());
     }
 
@@ -137,7 +138,7 @@ class InvoiceEmailTest extends BaseIntegrationTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("no email address")));
 
-        verify(emailService, never()).sendHtmlEmail(any(), any(), any(), any(), any(), any());
+        verify(emailService, never()).sendHtmlEmail(any(), any(), any(), any(), any(), any(), anyList());
     }
 
     @Test
@@ -151,7 +152,7 @@ class InvoiceEmailTest extends BaseIntegrationTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false));
 
-        verify(emailService, never()).sendHtmlEmail(any(), any(), any(), any(), any(), any());
+        verify(emailService, never()).sendHtmlEmail(any(), any(), any(), any(), any(), any(), anyList());
     }
 
     @Test
@@ -172,7 +173,7 @@ class InvoiceEmailTest extends BaseIntegrationTest {
 
         Invoice reloaded = invoiceRepository.findById(invoice.getId()).orElseThrow();
         assertThat(reloaded.getShareEnabled()).isFalse();
-        verify(emailService, never()).sendHtmlEmail(any(), any(), any(), any(), any(), any());
+        verify(emailService, never()).sendHtmlEmail(any(), any(), any(), any(), any(), any(), anyList());
     }
 
     @Test
@@ -190,15 +191,19 @@ class InvoiceEmailTest extends BaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        ArgumentCaptor<com.insideinvoice.email.EmailAttachment> attachment =
-                ArgumentCaptor.forClass(com.insideinvoice.email.EmailAttachment.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.List<com.insideinvoice.email.EmailAttachment>> parts =
+                ArgumentCaptor.forClass((Class) java.util.List.class);
         verify(emailService, times(1)).sendHtmlEmail(
-                any(), any(), any(), any(), any(), any(), attachment.capture());
+                any(), any(), any(), any(), any(), any(), parts.capture());
 
-        assertThat(attachment.getValue().filename())
+        // Exactly one part: the PDF (no logo seeded on this business).
+        assertThat(parts.getValue()).hasSize(1);
+        com.insideinvoice.email.EmailAttachment attachment = parts.getValue().get(0);
+        assertThat(attachment.filename())
                 .isEqualTo("Tax_Invoice_" + invoice.getInvoiceNumber() + ".pdf");
-        assertThat(attachment.getValue().mimeType()).isEqualTo("application/pdf");
-        assertThat(attachment.getValue().content()).isEqualTo(pdf);
+        assertThat(attachment.mimeType()).isEqualTo("application/pdf");
+        assertThat(attachment.content()).isEqualTo(pdf);
     }
 
     @Test
@@ -213,8 +218,13 @@ class InvoiceEmailTest extends BaseIntegrationTest {
                         .param("frontendOrigin", ORIGIN))
                 .andExpect(status().isOk());
 
-        // Falls back to the 6-arg overload: no attachment reached the mailer.
-        verify(emailService, times(1)).sendHtmlEmail(any(), any(), any(), any(), any(), any());
-        verify(emailService, never()).sendHtmlEmail(any(), any(), any(), any(), any(), any(), any());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.List<com.insideinvoice.email.EmailAttachment>> parts =
+                ArgumentCaptor.forClass((Class) java.util.List.class);
+        // The email still sends; the bad upload never reaches the mailer (and no
+        // logo is seeded here, so the parts list stays empty).
+        verify(emailService, times(1)).sendHtmlEmail(
+                any(), any(), any(), any(), any(), any(), parts.capture());
+        assertThat(parts.getValue()).isEmpty();
     }
 }

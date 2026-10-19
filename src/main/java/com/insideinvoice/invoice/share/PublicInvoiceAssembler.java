@@ -148,6 +148,7 @@ public class PublicInvoiceAssembler {
                 .jurisdictionEnabled(b.getJurisdictionEnabled() == null || b.getJurisdictionEnabled())
                 .jurisdictionRegion(b.getJurisdictionRegion())
                 .jurisdictionCity(b.getJurisdictionCity())
+                .logo(b.getLogo())
                 .signature(b.getSignature())
                 .industry(b.getIndustry())
                 .payment(PublicInvoiceResponse.PaymentInstructions.builder()

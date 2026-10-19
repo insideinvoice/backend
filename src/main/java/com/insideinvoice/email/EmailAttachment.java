@@ -8,13 +8,23 @@ package com.insideinvoice.email;
  * the filename must already be sanitized by the caller (it lands in a MIME
  * header).</p>
  *
- * @param filename   sanitized filename shown in the email client
- * @param content    raw file bytes (encoded to base64 before sending)
- * @param mimeType   MIME type, e.g. {@code application/pdf}
+ * <p>An attachment may also be marked INLINE via {@code inlineContentId}: the
+ * provider then serves it as a content-id part, referenced from the HTML body
+ * with {@code cid:<inlineContentId>} (the way embedded logos survive across
+ * mail clients, unlike {@code data:} URIs which Gmail strips).</p>
+ *
+ * @param filename        sanitized filename shown in the email client
+ * @param content         raw file bytes (encoded to base64 before sending)
+ * @param mimeType        MIME type, e.g. {@code application/pdf}
+ * @param inlineContentId content-id for inline embedding, or null for a plain attachment
  */
-public record EmailAttachment(String filename, byte[] content, String mimeType) {
+public record EmailAttachment(String filename, byte[] content, String mimeType, String inlineContentId) {
 
     public static EmailAttachment pdf(String filename, byte[] content) {
-        return new EmailAttachment(filename, content, "application/pdf");
+        return new EmailAttachment(filename, content, "application/pdf", null);
+    }
+
+    public static EmailAttachment inline(String filename, byte[] content, String mimeType, String contentId) {
+        return new EmailAttachment(filename, content, mimeType, contentId);
     }
 }

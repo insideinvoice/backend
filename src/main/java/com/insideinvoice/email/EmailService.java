@@ -75,7 +75,7 @@ public class EmailService {
      * @param fromName display name for the From header, e.g. the user's business name
      */
     public void sendHtmlEmail(String fromName, String toEmail, String subject, String htmlContent, String textContent, String replyTo) {
-        sendHtmlEmail(fromName, toEmail, subject, htmlContent, textContent, replyTo, null);
+        sendHtmlEmail(fromName, toEmail, subject, htmlContent, textContent, replyTo, (EmailAttachment) null);
     }
 
     /**
@@ -85,14 +85,25 @@ public class EmailService {
      * what the user downloads.
      */
     public void sendHtmlEmail(String fromName, String toEmail, String subject, String htmlContent, String textContent, String replyTo, EmailAttachment attachment) {
+        sendHtmlEmail(fromName, toEmail, subject, htmlContent, textContent, replyTo,
+                attachment == null ? java.util.List.<EmailAttachment>of() : java.util.List.of(attachment));
+    }
+
+    /**
+     * Multi-attachment variant: the invoice email carries the client PDF AND
+     * the seller's logo (inline content-id, referenced from the HTML body) in
+     * one message. Null/empty list = no attachments.
+     */
+    public void sendHtmlEmail(String fromName, String toEmail, String subject, String htmlContent, String textContent, String replyTo, java.util.List<EmailAttachment> attachments) {
         if (resolveApiKey(resendApiKey).isEmpty()) {
             throw new EmailDeliveryException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Email sending is not configured on this server");
         }
+        java.util.List<EmailAttachment> safe = attachments == null ? java.util.List.<EmailAttachment>of() : attachments;
         try {
-            sendViaResend(fromName, toEmail, subject, htmlContent, textContent, replyTo, attachment);
-            log.info("Email sent via Resend | from: {} <{}> | to: {} | subject: {} | attachment: {}",
-                    fromName, mailFrom, toEmail, subject, attachment != null ? attachment.filename() : "none");
+            sendViaResend(fromName, toEmail, subject, htmlContent, textContent, replyTo, safe);
+            log.info("Email sent via Resend | from: {} <{}> | to: {} | subject: {} | attachments: {}",
+                    fromName, mailFrom, toEmail, subject, safe.size());
         } catch (EmailDeliveryException e) {
             throw e;
         } catch (Exception e) {
@@ -147,10 +158,15 @@ public class EmailService {
     }
 
     private void sendViaResend(String fromName, String toEmail, String subject, String htmlContent, String textContent, String replyTo) throws Exception {
-        sendViaResend(fromName, toEmail, subject, htmlContent, textContent, replyTo, null);
+        sendViaResend(fromName, toEmail, subject, htmlContent, textContent, replyTo, java.util.List.<EmailAttachment>of());
     }
 
     private void sendViaResend(String fromName, String toEmail, String subject, String htmlContent, String textContent, String replyTo, EmailAttachment attachment) throws Exception {
+        sendViaResend(fromName, toEmail, subject, htmlContent, textContent, replyTo,
+                attachment == null ? java.util.List.<EmailAttachment>of() : java.util.List.of(attachment));
+    }
+
+    private void sendViaResend(String fromName, String toEmail, String subject, String htmlContent, String textContent, String replyTo, java.util.List<EmailAttachment> attachments) throws Exception {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("from", sanitizeFromName(fromName) + " <" + mailFrom + ">");
         body.put("to", new String[]{toEmail});
@@ -160,13 +176,25 @@ public class EmailService {
         if (replyTo != null && !replyTo.isBlank()) {
             body.put("reply_to", replyTo);
         }
-        if (attachment != null && attachment.content() != null && attachment.content().length > 0) {
-            // Resend expects base64-encoded content with an explicit filename.
-            body.put("attachments", java.util.List.of(Map.of(
-                    "filename", attachment.filename(),
-                    "content", java.util.Base64.getEncoder().encodeToString(attachment.content()),
-                    "mime_type", attachment.mimeType() == null ? "application/octet-stream" : attachment.mimeType()
-            )));
+        if (attachments != null && !attachments.isEmpty()) {
+            // Resend expects base64-encoded content with an explicit filename; an
+            // inlineContentId tells the provider to serve the part as inline
+            // (referenced from the HTML body with cid:<inlineContentId>).
+            java.util.List<Map<String, String>> parts = new java.util.ArrayList<>();
+            for (EmailAttachment att : attachments) {
+                if (att == null || att.content() == null || att.content().length == 0) continue;
+                Map<String, String> part = new java.util.HashMap<>();
+                part.put("filename", att.filename());
+                part.put("content", java.util.Base64.getEncoder().encodeToString(att.content()));
+                part.put("mime_type", att.mimeType() == null ? "application/octet-stream" : att.mimeType());
+                if (att.inlineContentId() != null && !att.inlineContentId().isBlank()) {
+                    part.put("content_id", att.inlineContentId());
+                }
+                parts.add(part);
+            }
+            if (!parts.isEmpty()) {
+                body.put("attachments", parts);
+            }
         }
         body.put("headers", Map.of(
                 "X-Entity-Ref-ID", UUID.randomUUID().toString(),

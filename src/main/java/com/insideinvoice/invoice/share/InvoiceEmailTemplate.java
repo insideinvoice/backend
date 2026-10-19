@@ -64,13 +64,22 @@ public final class InvoiceEmailTemplate {
         return build(invoice, customer, business, shareUrl, null);
     }
 
+    /** The HTML head renders the seller logo either from a public URL or an
+     *  inline content-id reference ({@code cid:...}); anything else → no image. */
+    private static boolean renderableLogo(String logoRef) {
+        if (logoRef == null) return false;
+        String v = logoRef.trim();
+        return (!v.isEmpty() && v.matches("https?://\\S+")) || v.startsWith("cid:");
+    }
+
     /**
-     * @param logoUrl optional public URL of the seller's logo (rendered max 40px
-     *                high, beside the business name). Blank/absent falls back to
-     *                the text-only header.
+     * @param logoRef optional logo source — a public URL or an inline
+     *                {@code cid:<content-id>} reference (rendered max 40px
+     *                high, beside the business name). Blank/absent falls back
+     *                to the text-only header.
      */
     public static Content build(Invoice invoice, Customer customer, Business business,
-                                String shareUrl, String logoUrl) {
+                                String shareUrl, String logoRef) {
         String typeLabel = invoice.getInvoiceType() == InvoiceType.PROFORMA_INVOICE
                 ? "Proforma Invoice" : "Tax Invoice";
         String businessName = blankTo(safe(business.getBusinessName()), "Your Business");
@@ -79,7 +88,7 @@ public final class InvoiceEmailTemplate {
                 + " \u2014 " + businessName
                 + " | Rs. " + inr(invoice.getGrandTotal());
 
-        String html = buildHtml(invoice, customer, business, businessName, typeLabel, shareUrl, logoUrl);
+        String html = buildHtml(invoice, customer, business, businessName, typeLabel, shareUrl, logoRef);
         String text = buildText(invoice, customer, business, businessName, typeLabel, shareUrl);
         return new Content(subject, html, text);
     }
@@ -87,7 +96,7 @@ public final class InvoiceEmailTemplate {
     // ---------------------------------------------------------------- HTML
 
     private static String buildHtml(Invoice invoice, Customer customer, Business business,
-                                    String businessName, String typeLabel, String shareUrl, String logoUrl) {
+                                    String businessName, String typeLabel, String shareUrl, String logoRef) {
         BigDecimal subtotal = nvl(invoice.getSubtotal());
         BigDecimal tax = nvl(invoice.getTaxAmount());
         BigDecimal grand = nvl(invoice.getGrandTotal());
@@ -167,9 +176,9 @@ public final class InvoiceEmailTemplate {
             .append("<tr><td class=\"px\" style=\"padding:20px 32px 18px;\">")
             .append("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>");
 
-        if (notBlank(logoUrl) && logoUrl.trim().matches("https?://\\S+")) {
+        if (renderableLogo(logoRef)) {
             html.append("<td valign=\"middle\" style=\"padding-right:12px;\">")
-                .append("<img src=\"").append(esc(logoUrl.trim()))
+                .append("<img src=\"").append(esc(logoRef.trim()))
                 .append("\" width=\"40\" height=\"40\" alt=\"").append(esc(businessName))
                 .append("\" style=\"display:block;height:40px;width:auto;max-height:40px;border:0;border-radius:8px;\">")
                 .append("</td>");
