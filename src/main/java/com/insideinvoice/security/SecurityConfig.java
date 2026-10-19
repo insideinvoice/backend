@@ -45,6 +45,13 @@ public class SecurityConfig {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
+                // Spring Security's default is X-Frame-Options: DENY, which makes
+                // the browser REFUSE to render the public invoice PDF inside the
+                // shared-invoice viewer's <iframe> (the page came up blank).
+                // SAMEORIGIN lets the site frame its own PDF — the share link
+                // serves it from the same origin (/api/...) — while still
+                // blocking every other site from framing the document.
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)
                         .accessDeniedHandler(jwtAccessDeniedHandler))
