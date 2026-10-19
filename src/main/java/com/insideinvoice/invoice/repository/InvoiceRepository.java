@@ -9,12 +9,37 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
 public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
     Page<Invoice> findByBusinessId(Long businessId, Pageable pageable);
+
+    /**
+     * Platform daily activity: invoices generated per day and how many distinct
+     * users generated at least one (COUNT DISTINCT skips NULL createdBy rows,
+     * e.g. imports), for the admin dashboard's last-30-days charts.
+     */
+    @Query(value = "SELECT CAST(created_at AS DATE) AS day, "
+            + "COUNT(*) AS invoice_count, "
+            + "COUNT(DISTINCT created_by) AS active_users "
+            + "FROM invoices WHERE created_at >= :cutoff "
+            + "GROUP BY 1 ORDER BY 1", nativeQuery = true)
+    List<Object[]> dailyActivitySince(@Param("cutoff") OffsetDateTime cutoff);
+
+    /**
+     * Window totals: row 0 = [COUNT(DISTINCT created_by), COUNT(*)]. Distinct users
+     * in the window can't be derived from the daily rows (sum-of-daily ≠ window-distinct).
+     */
+    @Query(value = "SELECT COUNT(DISTINCT created_by), COUNT(*) FROM invoices WHERE created_at >= :cutoff",
+            nativeQuery = true)
+    List<Object[]> periodTotalsSince(@Param("cutoff") OffsetDateTime cutoff);
+
+    /** Platform-wide latest invoice timestamp per user id (rows only for users who created invoices). */
+    @Query("SELECT i.createdBy, MAX(i.createdAt) FROM Invoice i WHERE i.createdBy IS NOT NULL GROUP BY i.createdBy")
+    List<Object[]> lastActivityByUser();
 
     @Query("SELECT DISTINCT i FROM Invoice i LEFT JOIN FETCH i.items WHERE i.businessId = :businessId")
     List<Invoice> findAllByBusinessId(@Param("businessId") Long businessId);
@@ -47,6 +72,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     boolean existsByInvoiceNumberAndBusinessId(String invoiceNumber, Long businessId);
 
     boolean existsByCustomerId(Long customerId);
+
+    /** All invoices of a customer — loaded for the customer-delete cascade. */
+    List<Invoice> findByCustomerId(Long customerId);
 
     boolean existsByShareToken(String shareToken);
 

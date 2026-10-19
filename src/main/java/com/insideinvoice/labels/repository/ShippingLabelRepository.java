@@ -28,6 +28,8 @@ public interface ShippingLabelRepository extends JpaRepository<ShippingLabel, Lo
     /** Soft-deleted rows keep their FK, so the pre-check must not filter deletedAt. */
     boolean existsByInvoiceId(Long invoiceId);
 
+    java.util.List<ShippingLabel> findByInvoiceId(Long invoiceId);
+
     Page<ShippingLabel> findByBusinessIdAndDeletedAtIsNull(Long businessId, Pageable pageable);
 
     @Query("""

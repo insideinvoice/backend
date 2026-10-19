@@ -8,10 +8,20 @@ import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.customer.mapper.CustomerMapper;
 import com.insideinvoice.customer.repository.CustomerRepository;
 import com.insideinvoice.customer.service.CustomerService;
-import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
+import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.repository.InvoiceRepository;
+import com.insideinvoice.labels.entity.HazmatLabel;
+import com.insideinvoice.labels.entity.ShippingLabel;
+import com.insideinvoice.labels.repository.HazmatLabelRepository;
+import com.insideinvoice.labels.repository.LabelFileRepository;
+import com.insideinvoice.labels.repository.ShippingLabelRepository;
+import com.insideinvoice.payment.repository.PaymentRepository;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +41,10 @@ public class CustomerServiceImpl implements CustomerService {
     private final CustomerRepository customerRepository;
     private final CustomerMapper customerMapper;
     private final InvoiceRepository invoiceRepository;
+    private final PaymentRepository paymentRepository;
+    private final ShippingLabelRepository shippingLabelRepository;
+    private final HazmatLabelRepository hazmatLabelRepository;
+    private final LabelFileRepository labelFileRepository;
 
     @Override
     @Transactional
@@ -139,15 +153,47 @@ public class CustomerServiceImpl implements CustomerService {
         Customer customer = customerRepository.findByIdAndBusinessId(id, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
 
-        // fk_invoices_customer (V1:105, NO ACTION) turns this into a raw
-        // DataIntegrityViolationException → 500 with the row still present; pre-check
-        // so the client gets an actionable 400.
-        if (invoiceRepository.existsByCustomerId(id)) {
-            throw new BadRequestException("Cannot delete customer: invoices exist for this customer");
+        // Deleting a customer takes their invoices with them. The schema blocks a
+        // naked customer delete (fk_invoices_customer V1:105, NO ACTION → raw 500),
+        // and invoice rows are themselves referenced by payments (fk_payments_invoice
+        // V8:13) and shipping/hazmat labels (V14:37,87), so the cascade clears
+        // dependents in FK order: payments → label PDF files → label rows → invoices
+        // (items follow the parent via CascadeType.ALL) → the customer. label_files
+        // has no FK (V14:94) but is purged too so no orphaned PDFs are left behind —
+        // same order the admin label purge uses.
+        List<Invoice> invoices = invoiceRepository.findByCustomerId(id);
+        if (!invoices.isEmpty()) {
+            List<Long> invoiceIds = invoices.stream().map(Invoice::getId).toList();
+
+            for (Long invoiceId : invoiceIds) {
+                paymentRepository.deleteByInvoiceId(invoiceId);
+            }
+
+            List<ShippingLabel> shippingLabels = new ArrayList<>();
+            List<HazmatLabel> hazmatLabels = new ArrayList<>();
+            Set<Long> labelIds = new LinkedHashSet<>();
+            for (Long invoiceId : invoiceIds) {
+                for (ShippingLabel label : shippingLabelRepository.findByInvoiceId(invoiceId)) {
+                    shippingLabels.add(label);
+                    labelIds.add(label.getId());
+                }
+                for (HazmatLabel label : hazmatLabelRepository.findByInvoiceId(invoiceId)) {
+                    hazmatLabels.add(label);
+                    labelIds.add(label.getId());
+                }
+            }
+            if (!labelIds.isEmpty()) {
+                labelFileRepository.deleteByLabelIdIn(labelIds);
+                shippingLabelRepository.deleteAll(shippingLabels);
+                hazmatLabelRepository.deleteAll(hazmatLabels);
+            }
+
+            invoiceRepository.deleteAll(invoices);
         }
 
         customerRepository.delete(customer);
 
-        log.info("Customer deleted: {} for businessId: {}", id, businessId);
+        log.info("Customer deleted: {} for businessId: {} ({} invoice(s) cascade-deleted)",
+                id, businessId, invoices.size());
     }
 }

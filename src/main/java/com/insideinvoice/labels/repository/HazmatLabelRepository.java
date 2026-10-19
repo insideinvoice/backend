@@ -28,6 +28,8 @@ public interface HazmatLabelRepository extends JpaRepository<HazmatLabel, Long> 
     /** Soft-deleted rows keep their FK, so the pre-check must not filter deletedAt. */
     boolean existsByInvoiceId(Long invoiceId);
 
+    java.util.List<HazmatLabel> findByInvoiceId(Long invoiceId);
+
     Page<HazmatLabel> findByBusinessIdAndDeletedAtIsNull(Long businessId, Pageable pageable);
 
     @Query("""

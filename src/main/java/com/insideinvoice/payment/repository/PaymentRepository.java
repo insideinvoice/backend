@@ -17,5 +17,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     boolean existsByInvoiceId(Long invoiceId);
 
+    void deleteByInvoiceId(Long invoiceId);
+
     void deleteByBusinessId(Long businessId);
 }
