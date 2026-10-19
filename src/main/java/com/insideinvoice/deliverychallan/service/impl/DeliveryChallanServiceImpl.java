@@ -85,6 +85,7 @@ public class DeliveryChallanServiceImpl implements DeliveryChallanService {
                     .sno(sno++)
                     .description(itemRequest.getDescription().trim())
                     .quantity(itemRequest.getQuantity())
+                    .remarks(trimToNull(itemRequest.getRemarks()))
                     .build();
             items.add(item);
         }
@@ -175,6 +176,7 @@ public class DeliveryChallanServiceImpl implements DeliveryChallanService {
                         .sno(item.getSno())
                         .description(item.getDescription())
                         .quantity(item.getQuantity())
+                        .remarks(item.getRemarks())
                         .build())
                 .toList();
 

@@ -19,4 +19,5 @@ public class DeliveryChallanItemResponse {
     private Integer sno;
     private String description;
     private BigDecimal quantity;
+    private String remarks;
 }

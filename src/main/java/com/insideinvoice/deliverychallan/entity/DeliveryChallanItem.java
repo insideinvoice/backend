@@ -42,4 +42,7 @@ public class DeliveryChallanItem {
 
     @Column(name = "quantity", nullable = false, precision = 12, scale = 3)
     private BigDecimal quantity;
+
+    @Column(name = "remarks", length = 300)
+    private String remarks;
 }

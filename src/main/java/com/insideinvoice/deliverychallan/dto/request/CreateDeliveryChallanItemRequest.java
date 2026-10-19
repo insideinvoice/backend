@@ -26,4 +26,8 @@ public class CreateDeliveryChallanItemRequest {
     @NotNull(message = "Quantity is required")
     @Positive(message = "Quantity must be positive")
     private BigDecimal quantity;
+
+    /** Optional: printed in the Royal template's Remarks column (Classic has none). */
+    @Size(max = 300, message = "Remarks must not exceed 300 characters")
+    private String remarks;
 }
