@@ -29,6 +29,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findTop10ByOrderByCreatedAtDesc();
 
+    /**
+     * Primary user record of a business (lowest id first is the account that
+     * created/owns it). Used by the admin workspace to resolve "on behalf of"
+     * ownership when the admin creates data inside a user's business.
+     */
+    List<User> findByBusinessIdOrderByIdAsc(Long businessId);
+
     long countByRole(Role role);
 
     long countByBusinessId(Long businessId);

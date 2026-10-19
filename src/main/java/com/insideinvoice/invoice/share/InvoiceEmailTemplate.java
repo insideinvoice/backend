@@ -236,16 +236,20 @@ public final class InvoiceEmailTemplate {
         }
         html.append("</td>");
 
-        // Bulletproof button (table cell + padding renders in Outlook).
+        // Bulletproof button (table cell + padding renders in Outlook). Real
+        // vertical padding on the anchor (not line-height) keeps the entire
+        // pill clickable — the Gmail app strips line-height from links, which
+        // otherwise shrinks the tap target to the text line only. Desktop
+        // Outlook needs mso-padding-alt to honour anchor padding.
         html.append("<td valign=\"middle\" align=\"right\" class=\"hero-cta\"")
             .append(" style=\"padding:26px 20px 26px 16px;white-space:nowrap;\">")
             .append("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"border-collapse:separate;\"><tr>")
             .append("<td align=\"center\" bgcolor=\"").append(INDIGO).append("\"")
             .append(" style=\"background-color:").append(INDIGO).append(";border-radius:6px;white-space:nowrap;\">")
             .append("<a href=\"").append(esc(shareUrl)).append("\"")
-            .append(" style=\"display:inline-block;padding:0 28px;line-height:44px;font-family:").append(FONT).append(";")
+            .append(" style=\"display:inline-block;padding:13px 28px;line-height:18px;font-family:").append(FONT).append(";")
             .append("font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;")
-            .append("white-space:nowrap;\">View Invoice</a>")
+            .append("white-space:nowrap;mso-padding-alt:13px 28px;\">View Invoice</a>")
             .append("</td></tr></table>")
             .append("<p style=\"margin:10px 0 0;font-size:12px;color:").append(SUBTLE).append(";text-align:right;\">")
             .append("<a href=\"").append(esc(shareUrl)).append("\" style=\"color:").append(MUTED)

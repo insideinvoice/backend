@@ -12,12 +12,15 @@ import com.insideinvoice.business.dto.response.BusinessResponse;
 import com.insideinvoice.business.entity.Business;
 import com.insideinvoice.business.mapper.BusinessMapper;
 import com.insideinvoice.business.repository.BusinessRepository;
+import com.insideinvoice.customer.dto.request.CreateCustomerRequest;
 import com.insideinvoice.customer.dto.response.CustomerResponse;
 import com.insideinvoice.customer.mapper.CustomerMapper;
 import com.insideinvoice.customer.repository.CustomerRepository;
+import com.insideinvoice.customer.service.CustomerService;
 import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
 import com.insideinvoice.customer.entity.Customer;
+import com.insideinvoice.invoice.dto.request.CreateInvoiceRequest;
 import com.insideinvoice.invoice.dto.request.UpdateInvoiceRequest;
 import com.insideinvoice.invoice.dto.response.InvoiceResponse;
 import com.insideinvoice.invoice.entity.Invoice;
@@ -28,6 +31,7 @@ import com.insideinvoice.product.dto.response.ProductResponse;
 import com.insideinvoice.product.entity.Product;
 import com.insideinvoice.product.mapper.ProductMapper;
 import com.insideinvoice.product.repository.ProductRepository;
+import com.insideinvoice.product.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -41,6 +45,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -77,7 +82,9 @@ public class AdminController {
     private EntityManager entityManager;
     private final InvoiceService invoiceService;
     private final CustomerMapper customerMapper;
+    private final CustomerService customerService;
     private final ProductMapper productMapper;
+    private final ProductService productService;
     private final AdminDeletionService adminDeletionService;
 
     @GetMapping("/users")
@@ -263,6 +270,111 @@ public class AdminController {
                 })
                 .toList();
         return ResponseEntity.ok(ApiResponse.success("Business invoices retrieved", result));
+    }
+
+    // ------------------------------------------------------------------
+    // Per-user workspace (admin triage console). Every operation delegates
+    // to the SAME services merchants use, with the resolved businessId
+    // passed explicitly — so all business rules apply unchanged: invoice
+    // numbering + sequence reservation, customer duplicate checks, and the
+    // FK delete guards ("payments recorded", "labels reference it",
+    // "invoices exist for this customer"). Nothing here raw-deletes.
+    // ------------------------------------------------------------------
+
+    @GetMapping("/businesses/{businessId}/customers")
+    @Operation(summary = "Get all customers of a specific business (Admin workspace)")
+    public ResponseEntity<ApiResponse<List<CustomerResponse>>> getBusinessCustomers(
+            @PathVariable Long businessId) {
+        requireBusiness(businessId);
+        List<CustomerResponse> result = customerRepository
+                .findByBusinessId(businessId, org.springframework.data.domain.Pageable.unpaged())
+                .getContent()
+                .stream()
+                .map(customerMapper::toResponse)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success("Business customers retrieved", result));
+    }
+
+    @PostMapping("/businesses/{businessId}/customers")
+    @Operation(summary = "Create a customer inside a specific business (Admin workspace)")
+    public ResponseEntity<ApiResponse<CustomerResponse>> createBusinessCustomer(
+            @PathVariable Long businessId,
+            @Valid @RequestBody CreateCustomerRequest request) {
+        requireBusiness(businessId);
+        CustomerResponse response = customerService.createCustomer(request, businessId);
+        log.info("Admin created customer for businessId: {}", businessId);
+        return ResponseEntity.ok(ApiResponse.success("Customer created", response));
+    }
+
+    @GetMapping("/businesses/{businessId}/products")
+    @Operation(summary = "Get all products of a specific business (Admin workspace)")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getBusinessProducts(
+            @PathVariable Long businessId) {
+        Business business = requireBusiness(businessId);
+        List<Map<String, Object>> result = productRepository.findByBusinessId(businessId).stream()
+                .map(p -> productSummary(p, business))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success("Business products retrieved", result));
+    }
+
+    @PostMapping("/businesses/{businessId}/invoices")
+    @Operation(summary = "Create an invoice inside a user's business (Admin on behalf of)")
+    public ResponseEntity<ApiResponse<InvoiceResponse>> createInvoiceForBusiness(
+            @PathVariable Long businessId,
+            @Valid @RequestBody CreateInvoiceRequest request) {
+        Business business = requireBusiness(businessId);
+        // Record the invoice under the account that owns the business (createdBy
+        // drives owner display elsewhere); "on behalf of" must look identical to
+        // a self-created invoice.
+        Long ownerUserId = userRepository.findByBusinessIdOrderByIdAsc(business.getId()).stream()
+                .findFirst()
+                .map(User::getId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "businessId", businessId));
+        InvoiceResponse response = invoiceService.createInvoice(request, business.getId(), ownerUserId);
+        log.info("Admin created invoice {} on behalf of businessId: {}", response.getInvoiceNumber(), businessId);
+        return ResponseEntity.ok(ApiResponse.success("Invoice created", response));
+    }
+
+    @DeleteMapping("/invoices/{invoiceId}")
+    @Operation(summary = "Delete any user's invoice (Admin override)")
+    public ResponseEntity<ApiResponse<String>> deleteInvoiceAsAdmin(@PathVariable Long invoiceId) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+        // Same guards as the tenant delete (payments / labels FK checks) because
+        // the implementation is shared; the admin just skips the tenant match.
+        invoiceService.deleteInvoice(invoice.getId(), invoice.getBusinessId());
+        log.info("Admin deleted invoice: {} (businessId: {})", invoiceId, invoice.getBusinessId());
+        return ResponseEntity.ok(ApiResponse.success("Invoice deleted successfully"));
+    }
+
+    @DeleteMapping("/customers/{customerId}")
+    @Operation(summary = "Delete any user's customer (Admin override)")
+    public ResponseEntity<ApiResponse<String>> deleteCustomerAsAdmin(@PathVariable Long customerId) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", customerId));
+        // Same guard as the tenant delete: refuses with an actionable 400 while
+        // invoices still reference this customer.
+        customerService.deleteCustomer(customer.getId(), customer.getBusinessId());
+        log.info("Admin deleted customer: {} (businessId: {})", customerId, customer.getBusinessId());
+        return ResponseEntity.ok(ApiResponse.success("Customer deleted successfully"));
+    }
+
+    @DeleteMapping("/products/{productId}")
+    @Operation(summary = "Delete any user's product (Admin override)")
+    public ResponseEntity<ApiResponse<String>> deleteProductAsAdmin(@PathVariable Long productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", productId));
+        // Same service method the owner's delete uses; passing the product's own
+        // businessId satisfies the tenant lookup inside so the admin can delete
+        // products belonging to any business.
+        productService.deleteProduct(product.getId(), product.getBusinessId());
+        log.info("Admin deleted product: {} (businessId: {})", productId, product.getBusinessId());
+        return ResponseEntity.ok(ApiResponse.success("Product deleted successfully"));
+    }
+
+    private Business requireBusiness(Long businessId) {
+        return businessRepository.findById(businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Business not found with id: " + businessId));
     }
 
     @GetMapping("/invoices")
@@ -463,21 +575,32 @@ public class AdminController {
     @Operation(summary = "Get all registered products across all businesses (Admin only)")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllProducts() {
         List<Product> products = productRepository.findAll();
-        List<Map<String, Object>> result = products.stream().map(p -> {
-            Business business = businessRepository.findById(p.getBusinessId()).orElse(null);
-            String businessName = business != null ? business.getBusinessName() : "Unknown";
-            String ownerName = business != null ? business.getOwnerName() : "Unknown";
-            Map<String, Object> m = new HashMap<>();
-            m.put("id", p.getId());
-            m.put("name", p.getName());
-            m.put("hsn", p.getHsn());
-            m.put("rate", p.getRate());
-            m.put("gstPercentage", p.getGstPercentage());
-            m.put("businessName", businessName);
-            m.put("ownerName", ownerName);
-            m.put("createdAt", p.getCreatedAt() != null ? p.getCreatedAt().toString() : null);
-            return m;
-        }).toList();
+        List<Map<String, Object>> result = products.stream()
+                .map(p -> productSummary(p, null))
+                .toList();
         return ResponseEntity.ok(ApiResponse.success("Products retrieved", result));
+    }
+
+    /**
+     * Same view shape for the platform product list and the per-business
+     * workspace list. When the business is already resolved (workspace) it is
+     * reused instead of issuing one findById per product.
+     */
+    private Map<String, Object> productSummary(Product p, Business resolvedBusiness) {
+        Business business = resolvedBusiness != null
+                ? resolvedBusiness
+                : businessRepository.findById(p.getBusinessId()).orElse(null);
+        String businessName = business != null ? business.getBusinessName() : "Unknown";
+        String ownerName = business != null ? business.getOwnerName() : "Unknown";
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", p.getId());
+        m.put("name", p.getName());
+        m.put("hsn", p.getHsn());
+        m.put("rate", p.getRate());
+        m.put("gstPercentage", p.getGstPercentage());
+        m.put("businessName", businessName);
+        m.put("ownerName", ownerName);
+        m.put("createdAt", p.getCreatedAt() != null ? p.getCreatedAt().toString() : null);
+        return m;
     }
 }
