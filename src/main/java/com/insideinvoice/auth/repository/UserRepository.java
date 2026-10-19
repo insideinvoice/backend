@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,6 +29,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
 
     List<User> findTop10ByOrderByCreatedAtDesc();
+
+    /** Monthly platform signup counts since cutoff (row 0 = month timestamp). Admin new-users chart. */
+    @org.springframework.data.jpa.repository.Query(value = "SELECT DATE_TRUNC('month', created_at) AS m, COUNT(*) "
+            + "FROM users WHERE created_at >= :cutoff GROUP BY 1 ORDER BY 1", nativeQuery = true)
+    List<Object[]> monthlySignupCount(@Param("cutoff") OffsetDateTime cutoff);
 
     /**
      * Primary user record of a business (lowest id first is the account that

@@ -60,18 +60,21 @@ class AdminWorkspaceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("Admin customer delete is blocked while invoices reference the customer (same guard as merchants)")
+    @DisplayName("Customer delete cascades: payments and the customer's invoices go with it")
     void deleteCustomerBlockedByInvoices() throws Exception {
         User owner = makeUser("wsdi-" + runId(), Role.USER);
         User admin = makeUser("wsdiadm-" + runId(), Role.ADMIN);
         Invoice invoice = seedInvoice(owner);
+        seedPayment(invoice, owner.getBusinessId(), new BigDecimal("50.00"));
 
         mockMvc.perform(delete("/api/admin/customers/" + invoice.getCustomerId())
                         .header("Authorization", bearerFor(admin)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("invoices exist")));
+                .andExpect(status().isOk());
 
-        assertThat(customerRepository.findById(invoice.getCustomerId())).isPresent();
+        // Nothing dangling: cascade removed the invoices and their payments too.
+        assertThat(invoiceRepository.findById(invoice.getId())).isEmpty();
+        assertThat(paymentRepository.findByInvoiceId(invoice.getId())).isEmpty();
+        assertThat(customerRepository.findById(invoice.getCustomerId())).isEmpty();
     }
 
     @Test
@@ -164,6 +167,79 @@ class AdminWorkspaceIntegrationTest extends BaseIntegrationTest {
 
         mockMvc.perform(delete("/api/admin/invoices/1").header("Authorization", bearerFor(user)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Stats window activity: seeding an invoice raises users/invoices-in-last-30-days and daily rows stay 30 long")
+    void statsDailyActivityTracksInvoiceActivity() throws Exception {
+        User admin = makeUser("wsadm2-" + runId(), Role.ADMIN);
+
+        double baseInvoices = extractStat(mockMvc.perform(get("/api/admin/stats")
+                .header("Authorization", bearerFor(admin)))
+                .andExpect(status().isOk())
+                .andReturn(), "invoicesLast30Days");
+        double baseUsers = extractStat(mockMvc.perform(get("/api/admin/stats")
+                .header("Authorization", bearerFor(admin)))
+                .andExpect(status().isOk())
+                .andReturn(), "activeUsersLast30Days");
+
+        User owner = makeUser("wsact-" + runId(), Role.USER);
+        seedInvoice(owner);
+
+        String body = mockMvc.perform(get("/api/admin/stats")
+                        .header("Authorization", bearerFor(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dailyActivity.length()").value(30))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(objectMapper.readTree(body).path("data").path("invoicesLast30Days").asDouble())
+                .isGreaterThanOrEqualTo(baseInvoices + 1);
+        assertThat(objectMapper.readTree(body).path("data").path("activeUsersLast30Days").asDouble())
+                .isGreaterThanOrEqualTo(baseUsers + 1);
+        // today's bucket exists and includes the new invoice
+        assertThat(objectMapper.readTree(body).path("data").path("dailyActivity").get(29).path("date").asText())
+                .isEqualTo(java.time.LocalDate.now().toString());
+        assertThat(objectMapper.readTree(body).path("data").path("dailyActivity").get(29).path("invoices").asInt())
+                .isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("User list flags who is active: generated an invoice in the last 30 days")
+    void userListExposesActivityStatus() throws Exception {
+        User active = makeUser("wsact1-" + runId(), Role.USER);
+        User idle = makeUser("wsidle-" + runId(), Role.USER);
+        User admin = makeUser("wsadm3-" + runId(), Role.ADMIN);
+        seedInvoice(active);
+
+        String body = mockMvc.perform(get("/api/admin/users")
+                        .header("Authorization", bearerFor(admin)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        com.fasterxml.jackson.databind.JsonNode users = objectMapper.readTree(body).path("data");
+        com.fasterxml.jackson.databind.JsonNode activeNode = findUserBy(users, active.getUsername());
+        com.fasterxml.jackson.databind.JsonNode idleNode = findUserBy(users, idle.getUsername());
+
+        assertThat(activeNode.path("active").asBoolean()).isTrue();
+        assertThat(activeNode.path("lastActivityAt").isNull()).isFalse();
+        assertThat(idleNode.path("active").asBoolean()).isFalse();
+        assertThat(idleNode.path("lastActivityAt").isNull()).isTrue();
+    }
+
+    private com.fasterxml.jackson.databind.JsonNode findUserBy(com.fasterxml.jackson.databind.JsonNode users, String username) {
+        for (com.fasterxml.jackson.databind.JsonNode u : users) {
+            if (username.equals(u.path("username").asText())) return u;
+        }
+        throw new AssertionError("user not found: " + username);
+    }
+
+    private double extractStat(org.springframework.test.web.servlet.MvcResult result, String field) {
+        try {
+            return objectMapper.readTree(result.getResponse().getContentAsString())
+                    .path("data").path(field).asDouble();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static String runId() {

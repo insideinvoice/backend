@@ -41,6 +41,11 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     @Query("SELECT i.createdBy, MAX(i.createdAt) FROM Invoice i WHERE i.createdBy IS NOT NULL GROUP BY i.createdBy")
     List<Object[]> lastActivityByUser();
 
+    /** Monthly invoice counts for ONE business since cutoff (row 0 = month timestamp). Admin "my invoices" chart. */
+    @Query(value = "SELECT DATE_TRUNC('month', created_at) AS m, COUNT(*) FROM invoices "
+            + "WHERE business_id = :businessId AND created_at >= :cutoff GROUP BY 1 ORDER BY 1", nativeQuery = true)
+    List<Object[]> monthlyCountByBusiness(@Param("businessId") Long businessId, @Param("cutoff") OffsetDateTime cutoff);
+
     @Query("SELECT DISTINCT i FROM Invoice i LEFT JOIN FETCH i.items WHERE i.businessId = :businessId")
     List<Invoice> findAllByBusinessId(@Param("businessId") Long businessId);
 

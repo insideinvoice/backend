@@ -22,4 +22,8 @@ public class UserWithPasswordResponse {
     private Long businessId;
     private String createdAt;
     private String rawPassword;
+    /** Timestamp of the user's most recent invoice (null = never generated one). */
+    private String lastActivityAt;
+    /** True when the user generated at least one invoice in the last 30 days. */
+    private Boolean active;
 }

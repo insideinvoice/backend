@@ -301,6 +301,8 @@ public class InvoiceServiceImpl implements InvoiceService {
         // FK order in the schema blocks the delete (fk_payments_invoice V8:13,
         // fk_shipping/hazmat_labels_invoice V14:37,87) — surface it as a 400 with an
         // actionable message instead of a raw DataIntegrityViolationException → 500.
+        // Soft-deleted label rows still satisfy the FK, so they block too; the admin
+        // purge route (GET /api/admin/labels?invoiceId=) is the way out.
         if (paymentRepository.existsByInvoiceId(id)) {
             throw new BadRequestException("Cannot delete invoice: payments are recorded against it");
         }

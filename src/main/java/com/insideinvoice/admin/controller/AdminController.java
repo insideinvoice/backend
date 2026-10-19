@@ -19,6 +19,7 @@ import com.insideinvoice.customer.repository.CustomerRepository;
 import com.insideinvoice.customer.service.CustomerService;
 import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
+import com.insideinvoice.exception.UnauthorizedException;
 import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.invoice.dto.request.CreateInvoiceRequest;
 import com.insideinvoice.invoice.dto.request.UpdateInvoiceRequest;
@@ -32,6 +33,18 @@ import com.insideinvoice.product.entity.Product;
 import com.insideinvoice.product.mapper.ProductMapper;
 import com.insideinvoice.product.repository.ProductRepository;
 import com.insideinvoice.product.service.ProductService;
+import com.insideinvoice.deliverychallan.dto.response.DeliveryChallanResponse;
+import com.insideinvoice.deliverychallan.entity.DeliveryChallan;
+import com.insideinvoice.deliverychallan.repository.DeliveryChallanRepository;
+import com.insideinvoice.deliverychallan.service.DeliveryChallanService;
+import com.insideinvoice.labels.dto.response.HazmatLabelResponse;
+import com.insideinvoice.labels.entity.HazmatLabel;
+import com.insideinvoice.labels.entity.ShippingLabel;
+import com.insideinvoice.labels.repository.HazmatLabelRepository;
+import com.insideinvoice.labels.repository.LabelFileRepository;
+import com.insideinvoice.labels.repository.ShippingLabelRepository;
+import com.insideinvoice.labels.service.HazmatLabelService;
+import com.insideinvoice.labels.service.ShippingLabelService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -49,10 +62,16 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -86,23 +105,40 @@ public class AdminController {
     private final ProductMapper productMapper;
     private final ProductService productService;
     private final AdminDeletionService adminDeletionService;
+    private final DeliveryChallanService deliveryChallanService;
+    private final DeliveryChallanRepository deliveryChallanRepository;
+    private final HazmatLabelService hazmatLabelService;
+    private final HazmatLabelRepository hazmatLabelRepository;
+    private final ShippingLabelService shippingLabelService;
+    private final ShippingLabelRepository shippingLabelRepository;
+    private final LabelFileRepository labelFileRepository;
 
     @GetMapping("/users")
     @Operation(summary = "Get all users with passwords (Admin only)")
     public ResponseEntity<ApiResponse<List<UserWithPasswordResponse>>> getAllUsers() {
         List<User> users = userRepository.findAll();
+        Map<Long, LocalDateTime> lastActivity = new HashMap<>();
+        for (Object[] row : invoiceRepository.lastActivityByUser()) {
+            lastActivity.put((Long) row[0], (LocalDateTime) row[1]);
+        }
+        LocalDateTime activeCutoff = LocalDateTime.now().minusDays(30);
         List<UserWithPasswordResponse> result = users.stream()
-                .map(u -> UserWithPasswordResponse.builder()
-                        .id(u.getId())
-                        .name(u.getName())
-                        .username(u.getUsername())
-                        .email(u.getEmail())
-                        .role(u.getRole().name())
-                        .password(u.getPassword())
-                        .rawPassword(u.getRawPassword())
-                        .businessId(u.getBusinessId())
-                        .createdAt(u.getCreatedAt() != null ? u.getCreatedAt().toString() : null)
-                        .build())
+                .map(u -> {
+                    LocalDateTime acts = lastActivity.get(u.getId());
+                    return UserWithPasswordResponse.builder()
+                            .id(u.getId())
+                            .name(u.getName())
+                            .username(u.getUsername())
+                            .email(u.getEmail())
+                            .role(u.getRole().name())
+                            .password(u.getPassword())
+                            .rawPassword(u.getRawPassword())
+                            .businessId(u.getBusinessId())
+                            .createdAt(u.getCreatedAt() != null ? u.getCreatedAt().toString() : null)
+                            .lastActivityAt(acts != null ? acts.toString() : null)
+                            .active(acts != null && acts.isAfter(activeCutoff))
+                            .build();
+                })
                 .toList();
         return ResponseEntity.ok(ApiResponse.success("Users retrieved", result));
     }
@@ -128,12 +164,58 @@ public class AdminController {
                         .build())
                 .toList();
 
+        // Last-30-days window activity for the dashboard's Active Users KPI +
+        // the Active Users / Invoices Generated charts below Monthly Sales.
+        OffsetDateTime cutoff = OffsetDateTime.now().minusDays(30);
+        long activeUsersLast30Days = 0;
+        long invoicesLast30Days = 0;
+        List<Object[]> periodRows = invoiceRepository.periodTotalsSince(cutoff);
+        if (!periodRows.isEmpty() && periodRows.get(0) != null && periodRows.get(0).length >= 2) {
+            activeUsersLast30Days = ((Number) periodRows.get(0)[0]).longValue();
+            invoicesLast30Days = ((Number) periodRows.get(0)[1]).longValue();
+        }
+
+        Map<String, AdminStatsResponse.DailyActivity> activityByDayAll = new HashMap<>();
+        for (Object[] row : invoiceRepository.dailyActivitySince(cutoff)) {
+            if (row.length < 3 || row[0] == null) continue;
+            String day = ((java.sql.Date) row[0]).toLocalDate().toString();
+            activityByDayAll.put(day, AdminStatsResponse.DailyActivity.builder()
+                    .date(day)
+                    .invoices(((Number) row[1]).longValue())
+                    .activeUsers(((Number) row[2]).longValue())
+                    .build());
+        }
+        List<AdminStatsResponse.DailyActivity> dailyActivity = new ArrayList<>();
+        LocalDate today = LocalDate.now();
+        for (int i = 29; i >= 0; i--) {
+            String day = today.minusDays(i).toString();
+            AdminStatsResponse.DailyActivity a = activityByDayAll.get(day);
+            dailyActivity.add(a != null ? a : AdminStatsResponse.DailyActivity.builder()
+                    .date(day).invoices(0).activeUsers(0).build());
+        }
+
+        // New users per month (last 6) + the calling admin's OWN business invoices
+        // per month (last 12) — "I sold it, I generate the invoice" operator charts.
+        LocalDateTime signupCutoff = LocalDate.now().minusMonths(5).withDayOfMonth(1).atStartOfDay();
+        List<AdminStatsResponse.MonthlyCount> newUsersByMonth = fillMonths(
+                userRepository.monthlySignupCount(signupCutoff.atOffset(ZoneOffset.UTC)), 6);
+        Long ownBusinessId = currentAdminBusinessId();
+        LocalDateTime ownCutoff = LocalDate.now().minusMonths(11).withDayOfMonth(1).atStartOfDay();
+        List<AdminStatsResponse.MonthlyCount> ownInvoicesByMonth = ownBusinessId == null ? List.of()
+                : fillMonths(invoiceRepository.monthlyCountByBusiness(ownBusinessId,
+                        ownCutoff.atOffset(ZoneOffset.UTC)), 12);
+
         AdminStatsResponse stats = AdminStatsResponse.builder()
                 .totalUsers(totalUsers)
                 .totalBusinesses(totalBusinesses)
                 .totalInvoices(totalInvoices)
                 .totalCustomers(totalCustomers)
                 .totalProducts(totalProducts)
+                .activeUsersLast30Days(activeUsersLast30Days)
+                .invoicesLast30Days(invoicesLast30Days)
+                .dailyActivity(dailyActivity)
+                .newUsersByMonth(newUsersByMonth)
+                .ownInvoicesByMonth(ownInvoicesByMonth)
                 .recentUsers(recentUsers)
                 .build();
 
@@ -372,6 +454,177 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success("Product deleted successfully"));
     }
 
+    // ------------------------------------------------------------ challans & labels (admin triage)
+
+    @GetMapping("/challans")
+    @Operation(summary = "Get all delivery challans across all businesses (Admin only)")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllChallans() {
+        List<DeliveryChallan> challans = deliveryChallanRepository.findAll(
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        Set<Long> customerIds = challans.stream().map(DeliveryChallan::getCustomerId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> businessIds = challans.stream().map(DeliveryChallan::getBusinessId).filter(Objects::nonNull).collect(Collectors.toSet());
+
+        Map<Long, String> customerNames = customerIds.isEmpty() ? Map.of() :
+                customerRepository.findAllById(customerIds).stream().collect(Collectors.toMap(com.insideinvoice.customer.entity.Customer::getId, com.insideinvoice.customer.entity.Customer::getName, (a, b) -> a));
+        Map<Long, String> businessNames = businessIds.isEmpty() ? Map.of() :
+                businessRepository.findAllById(businessIds).stream().collect(Collectors.toMap(Business::getId, Business::getBusinessName, (a, b) -> a));
+
+        List<Map<String, Object>> result = challans.stream().map(c -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", c.getId());
+            row.put("challanNumber", c.getChallanNumber());
+            row.put("challanDate", c.getChallanDate());
+            row.put("customerId", c.getCustomerId());
+            row.put("customerName", customerNames.get(c.getCustomerId()));
+            row.put("businessId", c.getBusinessId());
+            row.put("businessName", businessNames.get(c.getBusinessId()));
+            row.put("createdAt", c.getCreatedAt());
+            return row;
+        }).collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success("Delivery challans retrieved", result));
+    }
+
+    @GetMapping("/challans/{id}")
+    @Operation(summary = "Get any user's delivery challan (Admin override)")
+    public ResponseEntity<ApiResponse<DeliveryChallanResponse>> getChallanAsAdmin(@PathVariable Long id) {
+        DeliveryChallan challan = deliveryChallanRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Delivery challan", "id", id));
+        return ResponseEntity.ok(ApiResponse.success("Delivery challan retrieved",
+                deliveryChallanService.getDeliveryChallan(challan.getId(), challan.getBusinessId())));
+    }
+
+    @DeleteMapping("/challans/{id}")
+    @Operation(summary = "Delete any user's delivery challan (Admin override)")
+    public ResponseEntity<ApiResponse<String>> deleteChallanAsAdmin(@PathVariable Long id) {
+        DeliveryChallan challan = deliveryChallanRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Delivery challan", "id", id));
+        deliveryChallanService.deleteDeliveryChallan(challan.getId(), challan.getBusinessId());
+        log.info("Admin deleted delivery challan: {} (businessId: {})", id, challan.getBusinessId());
+        return ResponseEntity.ok(ApiResponse.success("Delivery challan deleted successfully"));
+    }
+
+    @GetMapping("/labels/hazmat/{id}")
+    @Operation(summary = "Get any user's hazmat label (Admin override)")
+    public ResponseEntity<ApiResponse<HazmatLabelResponse>> getHazmatLabelAsAdmin(@PathVariable Long id) {
+        HazmatLabel label = hazmatLabelRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("HazmatLabel", "id", id));
+        return ResponseEntity.ok(ApiResponse.success("Hazmat label retrieved",
+                hazmatLabelService.get(label.getId(), label.getBusinessId())));
+    }
+
+    /**
+     * Hard purge (mirrors AdminDeletionService's FK-safe order). The label service's
+     * own delete is a soft delete that KEEPS the fk_labels_invoice row, so it can
+     * never free the invoice; the purge is what removes the physical blocker.
+     */
+    @DeleteMapping("/labels/hazmat/{id}")
+    @Operation(summary = "Hard-delete any user's hazmat label + its files/audit rows (Admin override)")
+    public ResponseEntity<ApiResponse<String>> deleteHazmatLabelAsAdmin(@PathVariable Long id,
+            jakarta.servlet.http.HttpServletRequest request) {
+        HazmatLabel label = hazmatLabelRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("HazmatLabel", "id", id));
+        labelFileRepository.deleteByLabelIdIn(Set.of(label.getId()));
+        hazmatLabelRepository.delete(label);
+        log.info("Admin purged hazmat label: {} (businessId: {}, ip: {})", id, label.getBusinessId(), clientIp(request));
+        return ResponseEntity.ok(ApiResponse.success("Hazmat label deleted successfully"));
+    }
+
+    @GetMapping("/labels/shipping/{id}")
+    @Operation(summary = "Get any user's shipping label (Admin override)")
+    public ResponseEntity<ApiResponse<Object>> getShippingLabelAsAdmin(@PathVariable Long id) {
+        ShippingLabel label = shippingLabelRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("ShippingLabel", "id", id));
+        return ResponseEntity.ok(ApiResponse.success("Shipping label retrieved",
+                shippingLabelService.get(label.getId(), label.getBusinessId())));
+    }
+
+    @DeleteMapping("/labels/shipping/{id}")
+    @Operation(summary = "Hard-delete any user's shipping label + its files rows (Admin override)")
+    public ResponseEntity<ApiResponse<String>> deleteShippingLabelAsAdmin(@PathVariable Long id,
+            jakarta.servlet.http.HttpServletRequest request) {
+        ShippingLabel label = shippingLabelRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("ShippingLabel", "id", id));
+        labelFileRepository.deleteByLabelIdIn(Set.of(label.getId()));
+        shippingLabelRepository.delete(label);
+        log.info("Admin purged shipping label: {} (businessId: {}, ip: {})", id, label.getBusinessId(), clientIp(request));
+        return ResponseEntity.ok(ApiResponse.success("Shipping label deleted successfully"));
+    }
+
+    @GetMapping("/labels")
+    @Operation(summary = "Get EVERY label row attached to an invoice, incl. soft-deleted (Admin triage: invoice-delete blockers)")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getLabelsForInvoice(@RequestParam Long invoiceId) {
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+        List<Map<String, Object>> hazmat = hazmatLabelRepository.findByInvoiceId(invoice.getId()).stream()
+                .map(l -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", l.getId());
+                    row.put("kind", "hazmat");
+                    row.put("labelNumber", l.getLabelNumber());
+                    row.put("title", l.getProperShippingName());
+                    row.put("softDeleted", l.getDeletedAt() != null);
+                    return row;
+                }).collect(Collectors.toList());
+        List<Map<String, Object>> shipping = shippingLabelRepository.findByInvoiceId(invoice.getId()).stream()
+                .map(l -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", l.getId());
+                    row.put("kind", "shipping");
+                    row.put("labelNumber", l.getLabelNumber());
+                    row.put("title", l.getCarrier() != null ? l.getCarrier() : "shipping label");
+                    row.put("softDeleted", l.getDeletedAt() != null);
+                    return row;
+                }).collect(Collectors.toList());
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("invoiceId", invoice.getId());
+        result.put("blocksDelete", !shipping.isEmpty() || !hazmat.isEmpty());
+        result.put("hazmat", hazmat);
+        result.put("shipping", shipping);
+        return ResponseEntity.ok(ApiResponse.success("Invoice labels retrieved", result));
+    }
+
+    private String clientIp(jakarta.servlet.http.HttpServletRequest request) {
+        return request != null ? request.getRemoteAddr() : null;
+    }
+
+    /** Turns DATE_TRUNC rows into contiguous "YYYY-MM" buckets ending this month, zero-filled. */
+    private List<AdminStatsResponse.MonthlyCount> fillMonths(List<Object[]> rows, int months) {
+        Map<String, Long> byMonth = new HashMap<>();
+        for (Object[] row : rows) {
+            if (row.length < 2 || row[0] == null) continue;
+            // JDBC driver/hibernate mapping has varied: Instant (native DATE_TRUNC),
+            // Timestamp, or Date all observed across environments — tolerate each.
+            LocalDate monthStart;
+            if (row[0] instanceof java.time.Instant instant) {
+                monthStart = instant.atZone(ZoneOffset.UTC).toLocalDate().withDayOfMonth(1);
+            } else if (row[0] instanceof java.sql.Timestamp ts) {
+                monthStart = ts.toLocalDateTime().toLocalDate().withDayOfMonth(1);
+            } else if (row[0] instanceof java.sql.Date d) {
+                monthStart = d.toLocalDate().withDayOfMonth(1);
+            } else {
+                continue;
+            }
+            String key = monthStart.toString().substring(0, 7);
+            byMonth.merge(key, ((Number) row[1]).longValue(), Long::sum);
+        }
+        List<AdminStatsResponse.MonthlyCount> result = new ArrayList<>();
+        LocalDate anchor = LocalDate.now();
+        for (int i = months - 1; i >= 0; i--) {
+            String key = anchor.minusMonths(i).withDayOfMonth(1).toString().substring(0, 7);
+            result.add(AdminStatsResponse.MonthlyCount.builder()
+                    .month(key)
+                    .count(byMonth.getOrDefault(key, 0L))
+                    .build());
+        }
+        return result;
+    }
+
+    private Long currentAdminBusinessId() {
+        User admin = userRepository.findByUsername(SecurityContextHolder.getContext().getAuthentication().getName())
+                .orElse(null);
+        return admin != null ? admin.getBusinessId() : null;
+    }
+
     private Business requireBusiness(Long businessId) {
         return businessRepository.findById(businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Business not found with id: " + businessId));
@@ -469,6 +722,18 @@ public class AdminController {
         String currentEmail = SecurityContextHolder.getContext().getAuthentication().getName();
         if (user.getEmail().equals(currentEmail)) {
             throw new BadRequestException("Cannot change your own role");
+        }
+
+        // Cross-confirmation: the acting admin must re-enter their own password so a
+        // hijacked/unsupervised session cannot silently grant or revoke admin rights.
+        String adminPassword = body.get("adminPassword");
+        if (adminPassword == null || adminPassword.isBlank()) {
+            throw new BadRequestException("Enter your (admin) password to confirm this change");
+        }
+        User actingAdmin = userRepository.findByEmail(currentEmail)
+                .orElseThrow(() -> new UnauthorizedException("Admin account not found. Please sign in again."));
+        if (!passwordEncoder.matches(adminPassword, actingAdmin.getPassword())) {
+            throw new UnauthorizedException("Incorrect password. Role change cancelled.");
         }
 
         if (user.getRole() == Role.ADMIN) {
