@@ -228,7 +228,7 @@ public class PublicInvoicePdfService {
             int rateIdx = showHnSac ? 5 : 4;
             int amtIdx = showHnSac ? 6 : 5;
             c.text(dec(item.getGstPercentage(), false) + "%", x[gstIdx] + colW[gstIdx] - 1.5, y + 1.6, 8, false, PdfCanvas.Align.RIGHT);
-            c.text(num(item.getQty()) + unitSuffix(item), x[qtyIdx] + colW[qtyIdx] - 1.5, y + 1.6, 8, false, PdfCanvas.Align.RIGHT);
+            c.text(qtyStr(item.getQty()) + unitSuffix(item), x[qtyIdx] + colW[qtyIdx] - 1.5, y + 1.6, 8, false, PdfCanvas.Align.RIGHT);
             c.text(num(item.getRate()), x[rateIdx] + colW[rateIdx] - 1.5, y + 1.6, 8, false, PdfCanvas.Align.RIGHT);
             c.text(num(item.getTaxableValue()), x[amtIdx] + colW[amtIdx] - 1.5, y + 1.6, 8, true, PdfCanvas.Align.RIGHT);
             c.strokeRgb(203, 213, 225);
@@ -400,6 +400,16 @@ public class PublicInvoicePdfService {
             return "-";
         }
         return String.format(LOCALE_IN, "%,.2f", v);
+    }
+
+    /**
+     * Quantity prints as a whole number when it is one (5, not 5.00) — the
+     * stored scale's trailing zeros are stripped; a genuine decimal keeps
+     * its digits (2.50 → 2.5). Plain string output avoids scientific
+     * notation that {@link BigDecimal#stripTrailingZeros} can produce.
+     */
+    private static String qtyStr(BigDecimal v) {
+        return v == null ? "-" : v.stripTrailingZeros().toPlainString();
     }
 
     private static String dec(BigDecimal v, boolean grouped) {
