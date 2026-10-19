@@ -207,6 +207,41 @@ class InvoiceEmailTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("The seller's uploaded logo is embedded inline so the email header shows it")
+    void uploadedLogoIsEmbeddedInline() throws Exception {
+        // A real (tiny) PNG — the mailer is mocked, so only the parts list and
+        // the HTML body are asserted.
+        byte[] png = java.util.Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+        com.insideinvoice.business.entity.Business business =
+                businessRepository.findById(owner.getBusinessId()).orElseThrow();
+        business.setLogo(java.util.Base64.getEncoder().encodeToString(png));
+        businessRepository.save(business);
+
+        mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
+                        .header("Authorization", bearerFor(owner))
+                        .param("frontendOrigin", ORIGIN))
+                .andExpect(status().isOk());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.List<com.insideinvoice.email.EmailAttachment>> parts =
+                ArgumentCaptor.forClass((Class) java.util.List.class);
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(emailService, times(1)).sendHtmlEmail(
+                any(), any(), any(), html.capture(), any(), any(), parts.capture());
+
+        // Exactly one part: the logo, embedded as an inline content-id part.
+        assertThat(parts.getValue()).hasSize(1);
+        com.insideinvoice.email.EmailAttachment logo = parts.getValue().get(0);
+        assertThat(logo.mimeType()).isEqualTo("image/png");
+        assertThat(logo.content()).isEqualTo(png);
+        assertThat(logo.inlineContentId()).isNotBlank();
+
+        // The HTML references it by cid: a data: URI would be stripped by Gmail.
+        assertThat(html.getValue()).contains("cid:" + logo.inlineContentId());
+    }
+
+    @Test
     @DisplayName("A non-PDF upload is dropped — the email still sends, without the bad attachment")
     void nonPdfUploadIsDropped() throws Exception {
         byte[] notPdf = "not a pdf at all".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
