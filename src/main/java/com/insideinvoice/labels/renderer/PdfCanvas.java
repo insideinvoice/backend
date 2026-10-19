@@ -298,6 +298,35 @@ public final class PdfCanvas implements AutoCloseable {
         cs.setNonStrokingColor(new Color(r, g, b));
     }
 
+    /* ---------------------------------------------------------------- *
+     * Text colour — kept SEPARATE from the shape fill colour.
+     *
+     * Text used to inherit whatever fill colour was set last, so any text
+     * drawn after a tinted background rectangle (the buyer box, the banded
+     * item rows, the "PAYMENT DETAILS" panel) printed in that background
+     * colour — near-white text on white paper, i.e. an unreadable invoice.
+     * Text now uses its own colour: black by default, switched explicitly
+     * for light-on-dark text (the navy table header).
+     * ---------------------------------------------------------------- */
+
+    private Color textColor = Color.BLACK;
+
+    public void textColorBlack() {
+        textColor = Color.BLACK;
+    }
+
+    public void textColorWhite() {
+        textColor = Color.WHITE;
+    }
+
+    public void textColorGray(float gray) {
+        textColor = new Color(gray, gray, gray);
+    }
+
+    public void textColorRgb(int r, int g, int b) {
+        textColor = new Color(r, g, b);
+    }
+
     public void strokeBlack() throws IOException {
         cs.setStrokingColor(Color.BLACK);
     }
@@ -354,6 +383,11 @@ public final class PdfCanvas implements AutoCloseable {
         if (value == null || value.isEmpty()) {
             return;
         }
+        // Text uses its OWN colour (black unless the caller switched it for
+        // light-on-dark text). It used to inherit the last shape fill colour,
+        // so any text drawn after a tinted background rectangle printed in
+        // that tint — near-white body text on white paper.
+        cs.setNonStrokingColor(textColor);
         double widthMm = textWidthMm(value, sizePt, bold);
         double left = xMm;
         if (align == Align.CENTER) {

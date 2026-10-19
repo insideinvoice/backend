@@ -246,7 +246,9 @@ public class PublicInvoicePdfService {
         c.fillRgb(30, 41, 59);
         c.fillRect(M, y, CONTENT_W, 7);
         double[] x = colX(showHnSac);
-        c.fillWhite();
+        // Light-on-dark: the header text needs its own colour, independent of
+        // the navy fill. Black again for everything that follows.
+        c.textColorWhite();
         c.text("SNO", x[0] + colW[0] / 2, y + 1.5, 7.5, true, PdfCanvas.Align.CENTER);
         c.text("DESCRIPTION", x[1] + 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.LEFT);
         if (showHnSac) {
@@ -260,6 +262,8 @@ public class PublicInvoicePdfService {
         c.text("QUANTITY", x[qtyIdx] + colW[qtyIdx] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
         c.text("RATE", x[rateIdx] + colW[rateIdx] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
         c.text("AMOUNT", x[amtIdx] + colW[amtIdx] - 1.5, y + 1.5, 7.5, true, PdfCanvas.Align.RIGHT);
+        // Back to black for the body text that follows.
+        c.textColorBlack();
 
         // Draw vertical grid lines for header (will be extended by rows)
         c.strokeRgb(30, 41, 59);
