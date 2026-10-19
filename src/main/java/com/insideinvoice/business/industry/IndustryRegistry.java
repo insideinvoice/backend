@@ -206,7 +206,7 @@ public final class IndustryRegistry {
                         Map.entry(IndustryExtendedFields.REFERRING_DOCTOR, "e.g. Dr. Iyer")),
                 DocumentAccess.of(false, false, false)));
 
-        // --- Education & Training --------------------------------------------
+        // --- Training --------------------------------------------------------
         register(IndustryConfig.of(Industry.EDUCATION,
                 Set.of(IndustryField.DELIVERY_NOTE, IndustryField.DELIVERY_NOTE_DATE,
                         IndustryField.DISPATCH_DOC_NUMBER, IndustryField.DISPATCHED_THROUGH,
