@@ -112,6 +112,17 @@ public class PublicInvoiceResponse {
         private Boolean sealEnabled;
         /** Seal variant: "round" or "stamp". */
         private String sealType;
+        /**
+         * Configurable jurisdiction footer, mirrored here for the same reason
+         * as the seal: the share page renders on the customer's device, so the
+         * owner's "Subject to ... Jurisdiction" configuration has to travel
+         * in the payload instead of the historical hardcoded Bengaluru line.
+         */
+        private Boolean jurisdictionEnabled;
+        /** Selected Indian state / Union Territory; null when never chosen. */
+        private String jurisdictionRegion;
+        /** City/location printed in the jurisdiction footer. */
+        private String jurisdictionCity;
         private String signature;
         private String industry;
         private PaymentInstructions payment;

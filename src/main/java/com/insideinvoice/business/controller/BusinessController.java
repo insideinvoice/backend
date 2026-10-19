@@ -121,4 +121,39 @@ public class BusinessController {
         businessService.updateSignature(currentUser.getBusinessId(), null);
         return ResponseEntity.ok(ApiResponse.success("Signature removed"));
     }
+
+    @PostMapping(value = "/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload business logo (max 1MB)")
+    public ResponseEntity<ApiResponse<String>> uploadLogo(
+            @RequestParam("file") MultipartFile file,
+            @CurrentUser UserPrincipal currentUser) {
+        if (file.getSize() > 1_048_576) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("File size must not exceed 1MB"));
+        }
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            // Client-side read failure (truncated/corrupt part) — a 400, not a generic 500.
+            throw new com.insideinvoice.exception.BadRequestException("Could not read uploaded file");
+        }
+        // The stored value is rendered inside the Enterprise template's fixed logo
+        // box as a data URI, so a non-image would silently break the letterhead.
+        if (!isSupportedImage(bytes)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Logo must be a PNG, JPEG, WebP or GIF image"));
+        }
+        String base64 = Base64.getEncoder().encodeToString(bytes);
+        businessService.updateLogo(currentUser.getBusinessId(), base64);
+        return ResponseEntity.ok(ApiResponse.success("Logo uploaded successfully", base64));
+    }
+
+    @DeleteMapping("/logo")
+    @Operation(summary = "Remove business logo")
+    public ResponseEntity<ApiResponse<Void>> removeLogo(
+            @CurrentUser UserPrincipal currentUser) {
+        businessService.updateLogo(currentUser.getBusinessId(), null);
+        return ResponseEntity.ok(ApiResponse.success("Logo removed"));
+    }
 }

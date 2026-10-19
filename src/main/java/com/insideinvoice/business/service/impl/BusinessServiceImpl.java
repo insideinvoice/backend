@@ -11,6 +11,8 @@ import com.insideinvoice.business.mapper.BusinessMapper;
 import com.insideinvoice.business.repository.BusinessRepository;
 import com.insideinvoice.business.industry.Industry;
 import com.insideinvoice.business.service.BusinessService;
+import com.insideinvoice.common.IndianRegions;
+import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.DuplicateResourceException;
 import com.insideinvoice.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +49,14 @@ public class BusinessServiceImpl implements BusinessService {
         }
 
         businessMapper.updateEntity(business, request);
+        // Onboarding jurisdiction config (optional): omitted values keep the
+        // database defaults (line shown, "Bengaluru", region unknown), so old
+        // clients and partial payloads never break first-run setup.
+        applyJurisdictionSettings(
+                business,
+                request.getJurisdictionEnabled(),
+                request.getJurisdictionRegion(),
+                request.getJurisdictionCity());
         business.setOwnerName(user.getName());
         business = businessRepository.save(business);
 
@@ -111,9 +121,51 @@ public class BusinessServiceImpl implements BusinessService {
             business.setSealType("stamp".equalsIgnoreCase(request.getSealType().trim()) ? "stamp" : "round");
         }
 
+        // Invoice jurisdiction footer: null = leave unchanged (older clients).
+        // Shared with the onboarding setup path so both flows validate exactly
+        // the same way.
+        applyJurisdictionSettings(
+                business,
+                request.getJurisdictionEnabled(),
+                request.getJurisdictionRegion(),
+                request.getJurisdictionCity());
+
         business = businessRepository.save(business);
         log.info("Business updated: {}", businessId);
         return businessMapper.toResponse(business);
+    }
+
+    /**
+     * Applies the configurable jurisdiction footer settings to a business.
+     *
+     * <p>Semantics: every null argument means "leave the current value" (the
+     * database defaults for a fresh business) so older clients and partial
+     * payloads never break. The region must be a member of
+     * {@link IndianRegions}; the city is trimmed and its repeated whitespace
+     * collapsed; when the footer ends up enabled the city must be non-blank,
+     * otherwise the renderers could print a malformed footer line.</p>
+     */
+    private void applyJurisdictionSettings(Business business, Boolean enabled, String rawRegion, String rawCity) {
+        if (enabled != null) {
+            business.setJurisdictionEnabled(enabled);
+        }
+        if (rawRegion != null) {
+            if (!IndianRegions.isValid(rawRegion)) {
+                throw new BadRequestException(
+                        "Unknown jurisdiction region: '" + rawRegion
+                                + "'. Choose one of India's states or union territories.");
+            }
+            business.setJurisdictionRegion(rawRegion.trim());
+        }
+        if (rawCity != null) {
+            business.setJurisdictionCity(rawCity.replaceAll("\\s+", " ").trim());
+        }
+        boolean jurisdictionEnabled = !Boolean.FALSE.equals(business.getJurisdictionEnabled());
+        if (jurisdictionEnabled
+                && (business.getJurisdictionCity() == null || business.getJurisdictionCity().isBlank())) {
+            throw new BadRequestException(
+                    "Jurisdiction city is required when the jurisdiction line is shown on invoices.");
+        }
     }
 
     @Override
@@ -141,5 +193,15 @@ public class BusinessServiceImpl implements BusinessService {
         business.setSignature(base64Signature);
         businessRepository.save(business);
         log.info("Signature updated for businessId: {}", businessId);
+    }
+
+    @Override
+    @Transactional
+    public void updateLogo(Long businessId, String base64Logo) {
+        Business business = businessRepository.findById(businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Business", "id", businessId));
+        business.setLogo(base64Logo);
+        businessRepository.save(business);
+        log.info("Logo updated for businessId: {}", businessId);
     }
 }

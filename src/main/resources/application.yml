@@ -83,7 +83,9 @@ app:
     contact-email: insideinvoice87@gmail.com
   jwt:
     secret: NGE2ZjY4NmU0NDZmNjU1MzY1NjM3MjY1NzQ1NjY1NzI3OTU2NjU3Mjc5NTM2NTYzNzI2NTc0NGI2NTc5NDY2ZjcyNGE1NzU0NTM2OTY3NmU2OTZlNjc0MTZlNjQ0NTZlNjM3Mjc5NzA3NDY5NmY2ZQ==
-    expiration-ms: 10800000
+    # Normal session: 6h. "Remember me": 7 days. Logout happens when the token's
+    # own exp passes — not when the browser closes.
+    expiration-ms: 21600000
     remember-me-expiration-ms: 604800000
     refresh-expiration-ms: 2592000000
 logging:

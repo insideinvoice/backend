@@ -69,4 +69,18 @@ public class BusinessSetupRequest {
     private String specialistIn;
 
     private Boolean specialistInEnabled;
+
+    /**
+     * Optional onboarding jurisdiction configuration (see BusinessUpdateRequest).
+     * Omitted values fall back to the same legacy defaults every business gets
+     * from the database: the line shown with "Bengaluru", region unknown — so
+     * onboarding can never fail on this feature.
+     */
+    private Boolean jurisdictionEnabled;
+
+    @Size(max = 120, message = "Jurisdiction region must not exceed 120 characters")
+    private String jurisdictionRegion;
+
+    @Size(max = 120, message = "Jurisdiction city must not exceed 120 characters")
+    private String jurisdictionCity;
 }

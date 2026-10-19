@@ -69,6 +69,10 @@ public class Business extends BaseEntity {
     @Column(name = "signature", columnDefinition = "TEXT")
     private String signature;
 
+    /** Base64 company logo (Settings upload), printed top-left on template-32. */
+    @Column(name = "logo", columnDefinition = "TEXT")
+    private String logo;
+
     @Column(name = "bank_name")
     private String bankName;
 
@@ -133,4 +137,32 @@ public class Business extends BaseEntity {
     @Column(name = "seal_type", length = 20, nullable = false)
     @Builder.Default
     private String sealType = "round";
+
+    /**
+     * Configurable "Subject to ... Jurisdiction" footer. TRUE (DB default)
+     * preserves the historical rendering, where the line was hardcoded and
+     * always shown. FALSE removes the line from newly rendered documents; the
+     * separate "This is a Computer Generated Invoice" notice is unaffected.
+     */
+    @Column(name = "jurisdiction_enabled", nullable = false)
+    @Builder.Default
+    private Boolean jurisdictionEnabled = true;
+
+    /**
+     * Selected Indian state or Union Territory for the jurisdiction (see
+     * {@link com.insideinvoice.common.IndianRegions}). Optional and
+     * presentation-only: no historical "best guess" is written for existing
+     * businesses; null stays null until the owner picks one in Settings.
+     */
+    @Column(name = "jurisdiction_region", length = 120)
+    private String jurisdictionRegion;
+
+    /**
+     * City/location printed in the jurisdiction footer. DB default is the
+     * historical hardcoded value so every existing business keeps rendering
+     * exactly what it did before this column existed.
+     */
+    @Column(name = "jurisdiction_city", length = 120, nullable = false)
+    @Builder.Default
+    private String jurisdictionCity = "Bengaluru";
 }

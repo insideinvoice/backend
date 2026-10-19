@@ -58,6 +58,7 @@ public class BusinessMapper {
                 .invoicePrefix(business.getInvoicePrefix())
                 .nextInvoiceSequence(business.getNextInvoiceSequence())
                 .signature(business.getSignature())
+                .logo(business.getLogo())
                 .bankName(business.getBankName())
                 .accountNo(business.getAccountNo())
                 .branch(business.getBranch())
@@ -74,6 +75,9 @@ public class BusinessMapper {
                         IndustryRegistry.forRawIndustry(business.getIndustry())))
                 .createdAt(business.getCreatedAt())
                 .updatedAt(business.getUpdatedAt())
+                .jurisdictionEnabled(business.getJurisdictionEnabled() == null || business.getJurisdictionEnabled())
+                .jurisdictionRegion(business.getJurisdictionRegion())
+                .jurisdictionCity(business.getJurisdictionCity())
                 .build();
     }
 

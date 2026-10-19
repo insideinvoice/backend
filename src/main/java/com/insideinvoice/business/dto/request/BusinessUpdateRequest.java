@@ -86,4 +86,27 @@ public class BusinessUpdateRequest {
      */
     @Size(max = 20, message = "Seal type must not exceed 20 characters")
     private String sealType;
+
+    /**
+     * Show (TRUE) or hide (FALSE) the "SUBJECT TO {CITY} JURISDICTION" footer
+     * line on invoice documents. The Computer Generated notice is independent
+     * of this switch. Null = leave unchanged.
+     */
+    private Boolean jurisdictionEnabled;
+
+    /**
+     * Selected Indian state or Union Territory (must match
+     * {@link com.insideinvoice.common.IndianRegions#ALL}). Null = leave
+     * unchanged; the service validates membership and rejects unknown values.
+     */
+    @Size(max = 120, message = "Jurisdiction region must not exceed 120 characters")
+    private String jurisdictionRegion;
+
+    /**
+     * City/location printed in the jurisdiction footer, e.g. Bengaluru.
+     * Editable independently of the region; required (non-blank) whenever the
+     * footer is enabled. Null = leave unchanged.
+     */
+    @Size(max = 120, message = "Jurisdiction city must not exceed 120 characters")
+    private String jurisdictionCity;
 }

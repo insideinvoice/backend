@@ -15,5 +15,7 @@ public interface BusinessService {
 
     void updateSignature(Long businessId, String base64Signature);
 
+    void updateLogo(Long businessId, String base64Logo);
+
     BusinessResponse updateInvoiceSettings(Long businessId, UpdateInvoiceSettingsRequest request);
 }

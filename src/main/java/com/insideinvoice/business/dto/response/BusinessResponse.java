@@ -31,6 +31,9 @@ public class BusinessResponse {
     private String invoicePrefix;
     private Long nextInvoiceSequence;
     private String signature;
+
+    /** Base64 company logo (Settings upload); null = Enterprise template monogram fallback. */
+    private String logo;
     private String bankName;
     private String accountNo;
     private String branch;
@@ -50,6 +53,16 @@ public class BusinessResponse {
 
     /** Seal variant: "round" or "stamp". */
     private String sealType;
+
+    /** Whether the "SUBJECT TO {CITY} JURISDICTION" footer line is rendered. */
+    private Boolean jurisdictionEnabled;
+
+    /** Selected Indian state / Union Territory; null until the owner picks one. */
+    private String jurisdictionRegion;
+
+    /** City/location printed in the jurisdiction footer. */
+    private String jurisdictionCity;
+
     /** Resolved configuration for {@link #industry} — same package, no import needed. */
     private IndustryConfigResponse industryConfig;
     private LocalDateTime createdAt;
