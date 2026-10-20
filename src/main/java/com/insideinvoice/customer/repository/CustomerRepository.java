@@ -4,12 +4,33 @@ import com.insideinvoice.customer.entity.Customer;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     Page<Customer> findByBusinessId(Long businessId, Pageable pageable);
+
+    /**
+     * Cross-tenant admin search (name / email / phone / GSTIN) + per-business
+     * workspace search. {@code q = ''} matches everything, so one query serves
+     * both list and filter paths; matches ride the trigram indexes (V35).
+     */
+    @Query("SELECT c FROM Customer c WHERE (:q = '' "
+            + "OR LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')) "
+            + "OR LOWER(c.email) LIKE LOWER(CONCAT('%', :q, '%')) "
+            + "OR c.phone LIKE CONCAT('%', :q, '%') "
+            + "OR LOWER(c.gstIn) LIKE LOWER(CONCAT('%', :q, '%')))")
+    Page<Customer> searchAll(@Param("q") String q, Pageable pageable);
+
+    @Query("SELECT c FROM Customer c WHERE c.businessId = :businessId AND (:q = '' "
+            + "OR LOWER(c.name) LIKE LOWER(CONCAT('%', :q, '%')) "
+            + "OR LOWER(c.email) LIKE LOWER(CONCAT('%', :q, '%')) "
+            + "OR c.phone LIKE CONCAT('%', :q, '%') "
+            + "OR LOWER(c.gstIn) LIKE LOWER(CONCAT('%', :q, '%')))")
+    Page<Customer> searchByBusinessId(@Param("businessId") Long businessId, @Param("q") String q, Pageable pageable);
 
     java.util.List<Customer> findByIdInAndBusinessId(java.util.Collection<Long> ids, Long businessId);
 

@@ -42,8 +42,9 @@ class AdminWorkspaceIntegrationTest extends BaseIntegrationTest {
 
         mockMvc.perform(get(bizPath(owner.getBusinessId(), "customers")).header("Authorization", bearerFor(admin)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.length()").value(1))
-                .andExpect(jsonPath("$.data[0].id").value(mine.getId()));
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(mine.getId()));
     }
 
     @Test
@@ -212,11 +213,14 @@ class AdminWorkspaceIntegrationTest extends BaseIntegrationTest {
         seedInvoice(active);
 
         String body = mockMvc.perform(get("/api/admin/users")
+                        // Paged endpoint: pull the whole first window so the
+                        // freshly-fixture users above are always inside it.
+                        .param("size", "1000")
                         .header("Authorization", bearerFor(admin)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        com.fasterxml.jackson.databind.JsonNode users = objectMapper.readTree(body).path("data");
+        com.fasterxml.jackson.databind.JsonNode users = objectMapper.readTree(body).path("data").path("content");
         com.fasterxml.jackson.databind.JsonNode activeNode = findUserBy(users, active.getUsername());
         com.fasterxml.jackson.databind.JsonNode idleNode = findUserBy(users, idle.getUsername());
 

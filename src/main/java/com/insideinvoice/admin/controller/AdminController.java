@@ -1,9 +1,11 @@
 package com.insideinvoice.admin.controller;
 
 import com.insideinvoice.admin.dto.AdminStatsResponse;
+import com.insideinvoice.admin.dto.SalesAnalyticsResponse;
 import com.insideinvoice.admin.dto.UpdatePasswordRequest;
 import com.insideinvoice.admin.dto.UserWithPasswordResponse;
 import com.insideinvoice.admin.service.AdminDeletionService;
+import com.insideinvoice.admin.service.AdminSalesAnalyticsService;
 import com.insideinvoice.auth.dto.response.ApiResponse;
 import com.insideinvoice.auth.entity.Role;
 import com.insideinvoice.auth.entity.User;
@@ -12,6 +14,8 @@ import com.insideinvoice.business.dto.response.BusinessResponse;
 import com.insideinvoice.business.entity.Business;
 import com.insideinvoice.business.mapper.BusinessMapper;
 import com.insideinvoice.business.repository.BusinessRepository;
+import com.insideinvoice.common.PageParams;
+import com.insideinvoice.common.dto.PagedResponse;
 import com.insideinvoice.customer.dto.request.CreateCustomerRequest;
 import com.insideinvoice.customer.dto.response.CustomerResponse;
 import com.insideinvoice.customer.mapper.CustomerMapper;
@@ -25,7 +29,9 @@ import com.insideinvoice.invoice.dto.request.CreateInvoiceRequest;
 import com.insideinvoice.invoice.dto.request.UpdateInvoiceRequest;
 import com.insideinvoice.invoice.dto.response.InvoiceResponse;
 import com.insideinvoice.invoice.entity.Invoice;
+import com.insideinvoice.invoice.entity.InvoiceItem;
 import com.insideinvoice.invoice.mapper.InvoiceMapper;
+import com.insideinvoice.invoice.repository.InvoiceItemRepository;
 import com.insideinvoice.invoice.repository.InvoiceRepository;
 import com.insideinvoice.invoice.service.InvoiceService;
 import com.insideinvoice.product.dto.response.ProductResponse;
@@ -51,6 +57,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -112,35 +122,89 @@ public class AdminController {
     private final ShippingLabelService shippingLabelService;
     private final ShippingLabelRepository shippingLabelRepository;
     private final LabelFileRepository labelFileRepository;
+    private final InvoiceItemRepository invoiceItemRepository;
+    private final AdminSalesAnalyticsService salesAnalyticsService;
 
     @GetMapping("/users")
-    @Operation(summary = "Get all users with passwords (Admin only)")
-    public ResponseEntity<ApiResponse<List<UserWithPasswordResponse>>> getAllUsers() {
-        List<User> users = userRepository.findAll();
+    @Operation(summary = "Get users page with passwords (Admin only)")
+    public ResponseEntity<ApiResponse<PagedResponse<UserWithPasswordResponse>>> getAllUsers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "false") boolean activeOnly) {
+        // Page-scoped query: only this page's rows are hydrated and only their
+        // users contribute to the last-activity GROUP BY (bounded by idx_invoices_created_by_created_at).
+        Page<User> users = userRepository.search(normalize(q), activeOnly,
+                LocalDateTime.now().minusDays(30),
+                PageRequest.of(Math.max(page, 0), PageParams.clampSize(size),
+                        Sort.by(Sort.Direction.DESC, "createdAt")));
+
+        Map<Long, LocalDateTime> lastActivity = lastActivityFor(users.getContent());
+        List<UserWithPasswordResponse> rows = users.getContent().stream()
+                .map(u -> toUserResponse(u, lastActivity))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success("Users retrieved", toPaged(users, rows)));
+    }
+
+    @GetMapping("/users/{id}")
+    @Operation(summary = "Get one user with password (Admin workspace direct lookup)")
+    public ResponseEntity<ApiResponse<UserWithPasswordResponse>> getUser(@PathVariable Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", id));
+        return ResponseEntity.ok(ApiResponse.success("User retrieved",
+                toUserResponse(user, lastActivityFor(List.of(user)))));
+    }
+
+    /**
+     * Last-activity restricted to this page of users. The old platform-wide
+     * GROUP BY ran over the entire invoices table on every list request just to
+     * decorate a handful of rows.
+     */
+    private Map<Long, LocalDateTime> lastActivityFor(List<User> pageUsers) {
+        Set<Long> ids = pageUsers.stream().map(User::getId).filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, LocalDateTime> lastActivity = new HashMap<>();
-        for (Object[] row : invoiceRepository.lastActivityByUser()) {
+        if (ids.isEmpty()) {
+            return lastActivity;
+        }
+        for (Object[] row : invoiceRepository.lastActivityForUsers(ids)) {
             lastActivity.put((Long) row[0], (LocalDateTime) row[1]);
         }
+        return lastActivity;
+    }
+
+    private static UserWithPasswordResponse toUserResponse(User u, Map<Long, LocalDateTime> lastActivity) {
+        LocalDateTime acts = lastActivity.get(u.getId());
         LocalDateTime activeCutoff = LocalDateTime.now().minusDays(30);
-        List<UserWithPasswordResponse> result = users.stream()
-                .map(u -> {
-                    LocalDateTime acts = lastActivity.get(u.getId());
-                    return UserWithPasswordResponse.builder()
-                            .id(u.getId())
-                            .name(u.getName())
-                            .username(u.getUsername())
-                            .email(u.getEmail())
-                            .role(u.getRole().name())
-                            .password(u.getPassword())
-                            .rawPassword(u.getRawPassword())
-                            .businessId(u.getBusinessId())
-                            .createdAt(u.getCreatedAt() != null ? u.getCreatedAt().toString() : null)
-                            .lastActivityAt(acts != null ? acts.toString() : null)
-                            .active(acts != null && acts.isAfter(activeCutoff))
-                            .build();
-                })
-                .toList();
-        return ResponseEntity.ok(ApiResponse.success("Users retrieved", result));
+        return UserWithPasswordResponse.builder()
+                .id(u.getId())
+                .name(u.getName())
+                .username(u.getUsername())
+                .email(u.getEmail())
+                .role(u.getRole().name())
+                .password(u.getPassword())
+                .rawPassword(u.getRawPassword())
+                .businessId(u.getBusinessId())
+                .createdAt(u.getCreatedAt() != null ? u.getCreatedAt().toString() : null)
+                .lastActivityAt(acts != null ? acts.toString() : null)
+                .active(acts != null && acts.isAfter(activeCutoff))
+                .build();
+    }
+
+    /** Shared PagedResponse assembly — mirrors every tenant service. The Page carries only paging metadata; rows may be mapped DTOs. */
+    private static <T> PagedResponse<T> toPaged(Page<?> page, List<T> rows) {
+        return PagedResponse.<T>builder()
+                .content(rows)
+                .page(page.getNumber())
+                .size(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .last(page.isLast())
+                .first(page.isFirst())
+                .build();
+    }
+
+    private static String normalize(String q) {
+        return q == null ? "" : q.trim();
     }
 
     @GetMapping("/stats")
@@ -315,13 +379,31 @@ public class AdminController {
     }
 
     @GetMapping("/businesses")
-    @Operation(summary = "Get all registered businesses (Admin only)")
-    public ResponseEntity<ApiResponse<List<BusinessResponse>>> getAllBusinesses() {
-        List<Business> businesses = businessRepository.findAll();
-        List<BusinessResponse> result = businesses.stream()
+    @Operation(summary = "Get registered businesses page (Admin only)")
+    public ResponseEntity<ApiResponse<PagedResponse<BusinessResponse>>> getAllBusinesses(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+        Pageable pageable = PageParams.of(page, size, PageParams.safeSort(sortBy, sortDir,
+                Set.of("createdAt", "businessName", "ownerName", "email", "phone", "gstIn"), "createdAt"));
+        Page<Business> businesses = businessRepository.searchAll(normalize(q), pageable);
+        List<BusinessResponse> rows = businesses.getContent().stream()
                 .map(businessMapper::toResponse)
                 .toList();
-        return ResponseEntity.ok(ApiResponse.success("Businesses retrieved", result));
+        return ResponseEntity.ok(ApiResponse.success("Businesses retrieved", toPaged(businesses, rows)));
+    }
+
+    @GetMapping("/sales-analytics")
+    @Operation(summary = "SQL-side sales aggregates (platform-wide, or one business via ?businessId=)")
+    public ResponseEntity<ApiResponse<SalesAnalyticsResponse>> getSalesAnalytics(
+            @RequestParam(required = false) Long businessId) {
+        if (businessId != null) {
+            requireBusiness(businessId);
+        }
+        return ResponseEntity.ok(ApiResponse.success("Sales analytics retrieved",
+                salesAnalyticsService.getSalesAnalytics(businessId)));
     }
 
     @GetMapping("/businesses/{id}")
@@ -333,11 +415,20 @@ public class AdminController {
     }
 
     @GetMapping("/businesses/{businessId}/invoices")
-    @Operation(summary = "Get all invoices for a business (Admin only)")
-    public ResponseEntity<ApiResponse<List<InvoiceResponse>>> getBusinessInvoices(
-            @PathVariable Long businessId) {
-        List<Invoice> invoices = invoiceRepository.findAllByBusinessId(businessId);
-        Set<Long> customerIds = invoices.stream()
+    @Operation(summary = "Get invoices page for a business (Admin only)")
+    public ResponseEntity<ApiResponse<PagedResponse<InvoiceResponse>>> getBusinessInvoices(
+            @PathVariable Long businessId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+        Pageable pageable = PageParams.of(page, size, PageParams.safeSort(sortBy, sortDir,
+                Set.of("createdAt", "invoiceDate", "dueDate", "grandTotal", "invoiceNumber", "status"), "createdAt"));
+        Page<Invoice> invoices = invoiceRepository.searchByBusinessId(businessId, normalize(q), pageable);
+        List<Invoice> content = invoices.getContent();
+
+        Set<Long> customerIds = content.stream()
                 .map(Invoice::getCustomerId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
@@ -345,13 +436,20 @@ public class AdminController {
                 customerRepository.findAllById(customerIds).stream()
                         .collect(Collectors.toMap(Customer::getId, Customer::getName, (a, b) -> a));
 
-        List<InvoiceResponse> result = invoices.stream()
-                .map(invoice -> {
-                    String customerName = customerNames.getOrDefault(invoice.getCustomerId(), "Unknown");
-                    return invoiceMapper.toResponse(invoice, customerName);
-                })
+        // ONE items query for the whole page — the old JOIN FETCH dragged every
+        // invoice + every line item of the business into memory for a list view;
+        // per-page batch loading keeps the mapper lazy-safe without the N+1.
+        List<Long> invoiceIds = content.stream().map(Invoice::getId).toList();
+        Map<Long, List<InvoiceItem>> itemsByInvoice = invoiceIds.isEmpty() ? Map.of() :
+                invoiceItemRepository.findByInvoiceIdIn(invoiceIds).stream()
+                        .collect(Collectors.groupingBy(it -> it.getInvoice().getId()));
+
+        List<InvoiceResponse> rows = content.stream()
+                .map(invoice -> invoiceMapper.toResponse(invoice,
+                        customerNames.getOrDefault(invoice.getCustomerId(), "Unknown"),
+                        itemsByInvoice.getOrDefault(invoice.getId(), List.of())))
                 .toList();
-        return ResponseEntity.ok(ApiResponse.success("Business invoices retrieved", result));
+        return ResponseEntity.ok(ApiResponse.success("Business invoices retrieved", toPaged(invoices, rows)));
     }
 
     // ------------------------------------------------------------------
@@ -364,17 +462,22 @@ public class AdminController {
     // ------------------------------------------------------------------
 
     @GetMapping("/businesses/{businessId}/customers")
-    @Operation(summary = "Get all customers of a specific business (Admin workspace)")
-    public ResponseEntity<ApiResponse<List<CustomerResponse>>> getBusinessCustomers(
-            @PathVariable Long businessId) {
+    @Operation(summary = "Get customers page of a specific business (Admin workspace)")
+    public ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> getBusinessCustomers(
+            @PathVariable Long businessId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
         requireBusiness(businessId);
-        List<CustomerResponse> result = customerRepository
-                .findByBusinessId(businessId, org.springframework.data.domain.Pageable.unpaged())
-                .getContent()
-                .stream()
+        Pageable pageable = PageParams.of(page, size, PageParams.safeSort(sortBy, sortDir,
+                Set.of("createdAt", "name", "email", "phone", "city", "state"), "createdAt"));
+        Page<Customer> customers = customerRepository.searchByBusinessId(businessId, normalize(q), pageable);
+        List<CustomerResponse> rows = customers.getContent().stream()
                 .map(customerMapper::toResponse)
                 .toList();
-        return ResponseEntity.ok(ApiResponse.success("Business customers retrieved", result));
+        return ResponseEntity.ok(ApiResponse.success("Business customers retrieved", toPaged(customers, rows)));
     }
 
     @PostMapping("/businesses/{businessId}/customers")
@@ -389,14 +492,22 @@ public class AdminController {
     }
 
     @GetMapping("/businesses/{businessId}/products")
-    @Operation(summary = "Get all products of a specific business (Admin workspace)")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getBusinessProducts(
-            @PathVariable Long businessId) {
+    @Operation(summary = "Get products page of a specific business (Admin workspace)")
+    public ResponseEntity<ApiResponse<PagedResponse<Map<String, Object>>>> getBusinessProducts(
+            @PathVariable Long businessId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
         Business business = requireBusiness(businessId);
-        List<Map<String, Object>> result = productRepository.findByBusinessId(businessId).stream()
+        Pageable pageable = PageParams.of(page, size, PageParams.safeSort(sortBy, sortDir,
+                Set.of("createdAt", "name", "hsn", "rate", "gstPercentage"), "createdAt"));
+        Page<Product> products = productRepository.searchByBusinessId(businessId, normalize(q), pageable);
+        List<Map<String, Object>> rows = products.getContent().stream()
                 .map(p -> productSummary(p, business))
                 .toList();
-        return ResponseEntity.ok(ApiResponse.success("Business products retrieved", result));
+        return ResponseEntity.ok(ApiResponse.success("Business products retrieved", toPaged(products, rows)));
     }
 
     @PostMapping("/businesses/{businessId}/invoices")
@@ -457,19 +568,26 @@ public class AdminController {
     // ------------------------------------------------------------ challans & labels (admin triage)
 
     @GetMapping("/challans")
-    @Operation(summary = "Get all delivery challans across all businesses (Admin only)")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllChallans() {
-        List<DeliveryChallan> challans = deliveryChallanRepository.findAll(
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
-        Set<Long> customerIds = challans.stream().map(DeliveryChallan::getCustomerId).filter(Objects::nonNull).collect(Collectors.toSet());
-        Set<Long> businessIds = challans.stream().map(DeliveryChallan::getBusinessId).filter(Objects::nonNull).collect(Collectors.toSet());
+    @Operation(summary = "Get delivery challans page across all businesses (Admin only)")
+    public ResponseEntity<ApiResponse<PagedResponse<Map<String, Object>>>> getAllChallans(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(defaultValue = "") String q) {
+        // ORDER BY created_at DESC lives in the native query (rides the global
+        // index), so the Pageable carries no Sort; name lookups batch only this page.
+        Pageable pageable = PageRequest.of(Math.max(page, 0), PageParams.clampSize(size));
+        Page<DeliveryChallan> challans = deliveryChallanRepository.searchAll(normalize(q), pageable);
+        List<DeliveryChallan> content = challans.getContent();
+
+        Set<Long> customerIds = content.stream().map(DeliveryChallan::getCustomerId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> businessIds = content.stream().map(DeliveryChallan::getBusinessId).filter(Objects::nonNull).collect(Collectors.toSet());
 
         Map<Long, String> customerNames = customerIds.isEmpty() ? Map.of() :
                 customerRepository.findAllById(customerIds).stream().collect(Collectors.toMap(com.insideinvoice.customer.entity.Customer::getId, com.insideinvoice.customer.entity.Customer::getName, (a, b) -> a));
         Map<Long, String> businessNames = businessIds.isEmpty() ? Map.of() :
                 businessRepository.findAllById(businessIds).stream().collect(Collectors.toMap(Business::getId, Business::getBusinessName, (a, b) -> a));
 
-        List<Map<String, Object>> result = challans.stream().map(c -> {
+        List<Map<String, Object>> rows = content.stream().map(c -> {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("id", c.getId());
             row.put("challanNumber", c.getChallanNumber());
@@ -481,7 +599,7 @@ public class AdminController {
             row.put("createdAt", c.getCreatedAt());
             return row;
         }).collect(Collectors.toList());
-        return ResponseEntity.ok(ApiResponse.success("Delivery challans retrieved", result));
+        return ResponseEntity.ok(ApiResponse.success("Delivery challans retrieved", toPaged(challans, rows)));
     }
 
     @GetMapping("/challans/{id}")
@@ -631,14 +749,20 @@ public class AdminController {
     }
 
     @GetMapping("/invoices")
-    @Operation(summary = "Get all invoices across all businesses (Admin only)")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllInvoices() {
-        List<Invoice> invoices = invoiceRepository.findAll(
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+    @Operation(summary = "Get invoices page across all businesses (Admin only)")
+    public ResponseEntity<ApiResponse<PagedResponse<Map<String, Object>>>> getAllInvoices(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(defaultValue = "") String q) {
+        // One joined native query resolves search + display names for the page
+        // (the old path loaded EVERY invoice, then ran three findAllById batches).
+        Pageable pageable = PageRequest.of(Math.max(page, 0), PageParams.clampSize(size));
+        Page<Invoice> invoices = invoiceRepository.searchAll(normalize(q), pageable);
+        List<Invoice> content = invoices.getContent();
 
-        Set<Long> customerIds = invoices.stream().map(Invoice::getCustomerId).filter(Objects::nonNull).collect(Collectors.toSet());
-        Set<Long> businessIds = invoices.stream().map(Invoice::getBusinessId).filter(Objects::nonNull).collect(Collectors.toSet());
-        Set<Long> userIds = invoices.stream().map(Invoice::getCreatedBy).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> customerIds = content.stream().map(Invoice::getCustomerId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> businessIds = content.stream().map(Invoice::getBusinessId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Long> userIds = content.stream().map(Invoice::getCreatedBy).filter(Objects::nonNull).collect(Collectors.toSet());
 
         Map<Long, String> customerNames = customerIds.isEmpty() ? Map.of() :
                 customerRepository.findAllById(customerIds).stream().collect(Collectors.toMap(com.insideinvoice.customer.entity.Customer::getId, com.insideinvoice.customer.entity.Customer::getName, (a, b) -> a));
@@ -647,11 +771,11 @@ public class AdminController {
         Map<Long, String> userNames = userIds.isEmpty() ? Map.of() :
                 userRepository.findAllById(userIds).stream().collect(Collectors.toMap(com.insideinvoice.auth.entity.User::getId, com.insideinvoice.auth.entity.User::getName, (a, b) -> a));
 
-        List<Map<String, Object>> result = invoices.stream().map(inv -> {
+        List<Map<String, Object>> rows = content.stream().map(inv -> {
             String customerName = customerNames.getOrDefault(inv.getCustomerId(), "Unknown");
             String businessName = businessNames.getOrDefault(inv.getBusinessId(), "Unknown");
             String ownerName = userNames.getOrDefault(inv.getCreatedBy(), "Unknown");
-            Map<String, Object> m = new HashMap<>();
+            Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", inv.getId());
             m.put("invoiceNumber", inv.getInvoiceNumber());
             m.put("invoiceType", inv.getInvoiceType().name());
@@ -664,10 +788,11 @@ public class AdminController {
             m.put("grandTotal", inv.getGrandTotal());
             m.put("status", inv.getStatus().name());
             m.put("placeOfSupply", inv.getPlaceOfSupply());
+            m.put("taxMode", inv.getTaxMode() == null ? null : inv.getTaxMode().name());
             m.put("destination", inv.getDestination());
             return m;
         }).toList();
-        return ResponseEntity.ok(ApiResponse.success("Invoices retrieved", result));
+        return ResponseEntity.ok(ApiResponse.success("Invoices retrieved", toPaged(invoices, rows)));
     }
 
     @GetMapping("/invoices/{id}")
@@ -687,12 +812,20 @@ public class AdminController {
     }
 
     @GetMapping("/customers")
-    @Operation(summary = "Get all customers across all businesses (Admin only)")
-    public ResponseEntity<ApiResponse<List<CustomerResponse>>> getAllCustomers() {
-        List<CustomerResponse> result = customerRepository.findAll().stream()
+    @Operation(summary = "Get customers page across all businesses (Admin only)")
+    public ResponseEntity<ApiResponse<PagedResponse<CustomerResponse>>> getAllCustomers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+        Pageable pageable = PageParams.of(page, size, PageParams.safeSort(sortBy, sortDir,
+                Set.of("createdAt", "name", "email", "phone", "city", "state", "gstIn"), "createdAt"));
+        Page<Customer> customers = customerRepository.searchAll(normalize(q), pageable);
+        List<CustomerResponse> rows = customers.getContent().stream()
                 .map(customerMapper::toResponse)
                 .toList();
-        return ResponseEntity.ok(ApiResponse.success("Customers retrieved", result));
+        return ResponseEntity.ok(ApiResponse.success("Customers retrieved", toPaged(customers, rows)));
     }
 
     @PutMapping("/users/{id}/password")
@@ -837,13 +970,30 @@ public class AdminController {
     }
 
     @GetMapping("/products")
-    @Operation(summary = "Get all registered products across all businesses (Admin only)")
-    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAllProducts() {
-        List<Product> products = productRepository.findAll();
-        List<Map<String, Object>> result = products.stream()
-                .map(p -> productSummary(p, null))
+    @Operation(summary = "Get products page across all businesses (Admin only)")
+    public ResponseEntity<ApiResponse<PagedResponse<Map<String, Object>>>> getAllProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+        Pageable pageable = PageParams.of(page, size, PageParams.safeSort(sortBy, sortDir,
+                Set.of("createdAt", "name", "hsn", "rate", "gstPercentage"), "createdAt"));
+        Page<Product> pageProducts = productRepository.searchAll(normalize(q), pageable);
+
+        // Batch-load the owning businesses for THIS page only. productSummary(p, null)
+        // used to fall back to findById per row → an N+1 across the whole platform list.
+        Set<Long> businessIds = pageProducts.getContent().stream()
+                .map(Product::getBusinessId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Business> businessesById = businessIds.isEmpty() ? Map.of() :
+                businessRepository.findAllById(businessIds).stream()
+                        .collect(Collectors.toMap(Business::getId, b -> b, (a, b) -> a));
+        List<Map<String, Object>> rows = pageProducts.getContent().stream()
+                .map(p -> productSummary(p, businessesById.get(p.getBusinessId())))
                 .toList();
-        return ResponseEntity.ok(ApiResponse.success("Products retrieved", result));
+        return ResponseEntity.ok(ApiResponse.success("Products retrieved", toPaged(pageProducts, rows)));
     }
 
     /**

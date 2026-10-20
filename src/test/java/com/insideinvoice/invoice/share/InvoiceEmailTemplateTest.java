@@ -376,4 +376,49 @@ class InvoiceEmailTemplateTest {
 
         assertThat(content.html()).contains("CGST @ 9%").contains("SGST @ 9%");
     }
+
+    // -------------------------------------------------------- stored tax mode
+
+    /** Same ₹36-tax invoice with an explicitly persisted tax mode. */
+    private Invoice invoiceWithMode(String placeOfSupply, com.insideinvoice.invoice.entity.TaxMode mode) {
+        Invoice invoice = invoiceWith(placeOfSupply);
+        invoice.setTaxMode(mode);
+        return invoice;
+    }
+
+    @Test
+    @DisplayName("Stored IGST wins for an intra-state invoice — the user's selection is never silently changed")
+    void storedIgstWinsOverIntraStateHeuristic() {
+        Business business = Business.builder().businessName("Acme").state("Karnataka").build();
+        InvoiceEmailTemplate.Content content =
+                InvoiceEmailTemplate.build(invoiceWithMode("Karnataka",
+                        com.insideinvoice.invoice.entity.TaxMode.IGST), customer(), business, "https://x/i/tok");
+
+        assertThat(content.html()).contains("IGST").doesNotContain("CGST").doesNotContain("SGST");
+        assertThat(content.text()).contains("IGST: Rs.36.00").doesNotContain("CGST:").doesNotContain("SGST:");
+    }
+
+    @Test
+    @DisplayName("Stored CGST_SGST wins for an inter-state invoice — split legs, no IGST")
+    void storedSplitWinsOverInterStateHeuristic() {
+        Business business = Business.builder().businessName("Acme").state("Karnataka").build();
+        InvoiceEmailTemplate.Content content =
+                InvoiceEmailTemplate.build(invoiceWithMode("Maharashtra",
+                        com.insideinvoice.invoice.entity.TaxMode.CGST_SGST), customer(), business, "https://x/i/tok");
+
+        assertThat(content.html()).contains("CGST").contains("SGST").doesNotContain("IGST");
+        assertThat(content.text()).contains("CGST: Rs.18.00").contains("SGST: Rs.18.00").doesNotContain("IGST:");
+    }
+
+    @Test
+    @DisplayName("Stored mode still prints when business state is missing (no generic GST row)")
+    void storedModeSurvivesMissingBusinessState() {
+        Business business = Business.builder().businessName("Acme").build();
+        InvoiceEmailTemplate.Content content =
+                InvoiceEmailTemplate.build(invoiceWithMode("Karnataka",
+                        com.insideinvoice.invoice.entity.TaxMode.IGST), customer(), business, "https://x/i/tok");
+
+        assertThat(content.html()).contains("IGST").doesNotContain("CGST");
+        assertThat(content.text()).contains("IGST: Rs.36.00");
+    }
 }

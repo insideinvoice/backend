@@ -2,11 +2,14 @@ package com.insideinvoice.auth.repository;
 
 import com.insideinvoice.auth.entity.Role;
 import com.insideinvoice.auth.entity.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -14,6 +17,22 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByEmail(String email);
+
+    /**
+     * Admin user list: search on name/email/username plus the "Active" toggle.
+     * {@code activeOnly} narrows to users who generated an invoice since
+     * {@code cutoff} via an EXISTS subquery that rides
+     * {@code idx_invoices_created_by_created_at} (V35) instead of loading every
+     * invoice to filter client-side. {@code q = ''} matches everyone.
+     */
+    @Query("SELECT u FROM User u WHERE (:q = '' "
+            + "OR LOWER(u.name) LIKE LOWER(CONCAT('%', :q, '%')) "
+            + "OR LOWER(u.email) LIKE LOWER(CONCAT('%', :q, '%')) "
+            + "OR LOWER(u.username) LIKE LOWER(CONCAT('%', :q, '%'))) "
+            + "AND (:activeOnly = false "
+            + "OR EXISTS (SELECT i.id FROM Invoice i WHERE i.createdBy = u.id AND i.createdAt >= :cutoff))")
+    Page<User> search(@Param("q") String q, @Param("activeOnly") boolean activeOnly,
+            @Param("cutoff") LocalDateTime cutoff, Pageable pageable);
 
     Optional<User> findByUsername(String username);
 
