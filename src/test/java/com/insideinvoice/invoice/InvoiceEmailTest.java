@@ -19,23 +19,29 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Contract tests for POST /api/invoices/{id}/email.
+ * Contract tests for POST /api/invoices/{id}/email (ASYNC: returns PENDING
+ * immediately, the provider call runs on the invoice-email pool) and
+ * GET /api/invoices/{id}/email-status (terminal SENT/FAILED).
  *
  * <p>EmailService is mocked: nothing leaves the machine, and the exact
- * recipient/subject/HTML the platform would send is asserted instead. The
- * share-link lifecycle runs against the real database.</p>
+ * recipient/subject/HTML the platform would send is asserted instead (Mockito
+ * {@code timeout(...)} verifies wait for the async hand-off). The share-link
+ * lifecycle and the persisted email_status run against the real database.</p>
  */
 class InvoiceEmailTest extends BaseIntegrationTest {
 
     private static final String ORIGIN = "http://localhost:5173";
+    private static final long ASYNC_WAIT_MS = 5000;
 
     @MockBean
     private EmailService emailService;
@@ -52,22 +58,46 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         customer = customerRepository.findById(invoice.getCustomerId()).orElseThrow();
     }
 
+    /**
+     * Polls GET /email-status until it reports {@code expected} (or the wait
+     * elapses) and returns the raw response body for further assertions.
+     */
+    private String pollEmailStatusUntil(String expected) throws Exception {
+        long deadline = System.currentTimeMillis() + ASYNC_WAIT_MS;
+        String body = null;
+        while (true) {
+            body = mockMvc.perform(get("/api/invoices/" + invoice.getId() + "/email-status")
+                            .header("Authorization", bearerFor(owner)))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            if (body.contains("\"status\":\"" + expected + "\"")
+                    || System.currentTimeMillis() > deadline) {
+                return body;
+            }
+            Thread.sleep(100);
+        }
+    }
+
     @Test
-    @DisplayName("Owner sends: 200, correct recipient, branded subject, link + GST breakup in HTML")
+    @DisplayName("Owner queues: 200 PENDING immediately, then the send runs async with correct recipient/subject/HTML")
     void ownerSendsInvoiceEmail() throws Exception {
         mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
                         .header("Authorization", bearerFor(owner))
                         .param("frontendOrigin", ORIGIN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Invoice email sent to " + customer.getEmail()));
+                .andExpect(jsonPath("$.message").value("Invoice email queued for " + customer.getEmail()))
+                .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andExpect(jsonPath("$.data.recipient").value(customer.getEmail()));
 
+        // The provider call happens AFTER the response, on the async pool:
+        // Mockito's timeout() verify waits for it.
         ArgumentCaptor<String> to = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> subject = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> fromName = ArgumentCaptor.forClass(String.class);
-        verify(emailService, times(1)).sendHtmlEmail(
+        verify(emailService, timeout(ASYNC_WAIT_MS).times(1)).sendHtmlEmail(
                 fromName.capture(), to.capture(), subject.capture(), html.capture(), text.capture(), any(), anyList());
 
         // From brands the user's business; delivery is via Inside Invoice.
@@ -95,6 +125,57 @@ class InvoiceEmailTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("email-status flips to SENT (with emailedAt) after a successful async send")
+    void emailStatusBecomesSent() throws Exception {
+        mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
+                        .header("Authorization", bearerFor(owner))
+                        .param("frontendOrigin", ORIGIN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+
+        String body = pollEmailStatusUntil("SENT");
+        assertThat(body).contains("\"emailedAt\":");
+        // emailedAt is a real ISO-8601 timestamp once SENT, and no error is carried.
+        assertThat(objectMapper.readTree(body).path("data").path("emailedAt").isMissingNode()).isFalse();
+        assertThat(objectMapper.readTree(body).path("data").path("emailedAt").isNull()).isFalse();
+        assertThat(objectMapper.readTree(body).path("data").path("error").isNull()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Provider failure: POST still 200 PENDING, email-status becomes FAILED with a non-null error")
+    void providerFailureIsRecordedAsFailed() throws Exception {
+        doThrow(new RuntimeException("simulated provider outage"))
+                .when(emailService).sendHtmlEmail(any(), any(), any(), any(), any(), any(), anyList());
+
+        mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
+                        .header("Authorization", bearerFor(owner))
+                        .param("frontendOrigin", ORIGIN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+
+        String body = pollEmailStatusUntil("FAILED");
+        String error = objectMapper.readTree(body).path("data").path("error").asText(null);
+        assertThat(error).isNotBlank().contains("simulated provider outage");
+    }
+
+    @Test
+    @DisplayName("email-status for an unknown invoice is 404")
+    void emailStatusUnknownInvoiceIs404() throws Exception {
+        mockMvc.perform(get("/api/invoices/999999/email-status")
+                        .header("Authorization", bearerFor(owner)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("Anonymous email-status is 401")
+    void anonymousEmailStatusIs401() throws Exception {
+        mockMvc.perform(get("/api/invoices/" + invoice.getId() + "/email-status"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     @DisplayName("No body: falls back to the configured frontend base URL")
     void noBodyUsesConfiguredOrigin() throws Exception {
         mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
@@ -102,7 +183,8 @@ class InvoiceEmailTest extends BaseIntegrationTest {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
-        verify(emailService, times(1)).sendHtmlEmail(any(), any(), any(), html.capture(), any(), any(), anyList());
+        verify(emailService, timeout(ASYNC_WAIT_MS).times(1))
+                .sendHtmlEmail(any(), any(), any(), html.capture(), any(), any(), anyList());
         assertThat(html.getValue()).contains("https://insideinvoice.in/i/");
     }
 
@@ -122,7 +204,8 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         assertThat(reloaded.getShareToken()).isNotBlank();
 
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
-        verify(emailService, times(1)).sendHtmlEmail(any(), any(), any(), html.capture(), any(), any(), anyList());
+        verify(emailService, timeout(ASYNC_WAIT_MS).times(1))
+                .sendHtmlEmail(any(), any(), any(), html.capture(), any(), any(), anyList());
         assertThat(html.getValue()).contains("/i/" + reloaded.getShareToken());
     }
 
@@ -194,7 +277,7 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<java.util.List<com.insideinvoice.email.EmailAttachment>> parts =
                 ArgumentCaptor.forClass((Class) java.util.List.class);
-        verify(emailService, times(1)).sendHtmlEmail(
+        verify(emailService, timeout(ASYNC_WAIT_MS).times(1)).sendHtmlEmail(
                 any(), any(), any(), any(), any(), any(), parts.capture());
 
         // Exactly one part: the PDF (no logo seeded on this business).
@@ -227,7 +310,7 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         ArgumentCaptor<java.util.List<com.insideinvoice.email.EmailAttachment>> parts =
                 ArgumentCaptor.forClass((Class) java.util.List.class);
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
-        verify(emailService, times(1)).sendHtmlEmail(
+        verify(emailService, timeout(ASYNC_WAIT_MS).times(1)).sendHtmlEmail(
                 any(), any(), any(), html.capture(), any(), any(), parts.capture());
 
         // Exactly one part: the logo, embedded as an inline content-id part.
@@ -258,7 +341,7 @@ class InvoiceEmailTest extends BaseIntegrationTest {
                 ArgumentCaptor.forClass((Class) java.util.List.class);
         // The email still sends; the bad upload never reaches the mailer (and no
         // logo is seeded here, so the parts list stays empty).
-        verify(emailService, times(1)).sendHtmlEmail(
+        verify(emailService, timeout(ASYNC_WAIT_MS).times(1)).sendHtmlEmail(
                 any(), any(), any(), any(), any(), any(), parts.capture());
         assertThat(parts.getValue()).isEmpty();
     }
