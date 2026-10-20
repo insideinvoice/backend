@@ -51,6 +51,7 @@ public class PublicInvoiceAssembler {
                 .template(resolveTemplate(business, invoiceTypeName))
                 .paperSize(resolvePaperSize(business, invoiceTypeName))
                 .billingMode(invoice.getBillingMode() != null ? invoice.getBillingMode().name() : null)
+                .taxMode(invoice.getTaxMode() != null ? invoice.getTaxMode().name() : null)
                 .showHnSac(business == null || business.getShowHnSac() == null || business.getShowHnSac())
                 .paymentTerms(invoice.getPaymentTerms())
                 .paymentMode(invoice.getPaymentMode())

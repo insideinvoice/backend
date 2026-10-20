@@ -1,0 +1,12 @@
+-- V34: invoice-level GST tax mode (CGST_SGST | IGST).
+--
+-- Nullable on purpose:
+--   * every historical row stays NULL — no backfill, no blind IGST or
+--     CGST_SGST assignment, no recalculation (the stored tax_amount is
+--     mode-independent and is never touched);
+--   * renderers resolve NULL at read time via the existing
+--     place-of-supply vs business-state heuristic, so old invoices keep
+--     printing exactly as before;
+--   * new invoices write the user's selection (or the derived default)
+--     through the regular create/update API.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS tax_mode VARCHAR(20);

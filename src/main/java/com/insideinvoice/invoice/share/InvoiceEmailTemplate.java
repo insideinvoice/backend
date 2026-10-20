@@ -611,8 +611,17 @@ public final class InvoiceEmailTemplate {
 
     // ------------------------------------------------------------ helpers
 
-    /** CGST+SGST when the place of supply matches the business state, else IGST, else generic GST. */
+    /**
+     * The GST structure this invoice must present. The persisted selection
+     * wins outright (a user-chosen mode is never silently overridden);
+     * legacy rows without one fall back to place of supply vs business
+     * state: CGST+SGST when they match, IGST when they differ, generic GST
+     * when the information is missing.
+     */
     private static String gstKind(Invoice invoice, Business business) {
+        if (invoice.getTaxMode() != null) {
+            return invoice.getTaxMode().name();
+        }
         String pos = invoice.getPlaceOfSupply();
         String state = business == null ? null : business.getState();
         if (!notBlank(pos) || !notBlank(state)) return "GST";

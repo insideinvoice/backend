@@ -44,6 +44,13 @@ public class PublicInvoiceResponse {
     private String billingMode;
 
     /**
+     * Invoice-level GST tax mode (CGST_SGST / IGST); null = not recorded
+     * (legacy rows) — the renderer derives the applicable structure from
+     * seller state vs place of supply.
+     */
+    private String taxMode;
+
+    /**
      * Display-only HSN/SAC switch snapshot; TRUE (default) keeps the historical
      * rendering. Never affects stored codes or GST calculations.
      */

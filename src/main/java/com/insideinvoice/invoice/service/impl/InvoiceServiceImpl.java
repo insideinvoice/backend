@@ -1,6 +1,8 @@
 package com.insideinvoice.invoice.service.impl;
 
 import com.insideinvoice.common.dto.PagedResponse;
+import com.insideinvoice.business.entity.Business;
+import com.insideinvoice.business.repository.BusinessRepository;
 import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.customer.repository.CustomerRepository;
 import com.insideinvoice.exception.BadRequestException;
@@ -14,6 +16,7 @@ import com.insideinvoice.invoice.entity.BillingMode;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.entity.InvoiceStatus;
 import com.insideinvoice.invoice.entity.InvoiceType;
+import com.insideinvoice.invoice.entity.TaxMode;
 import com.insideinvoice.invoice.mapper.InvoiceMapper;
 import com.insideinvoice.invoice.repository.InvoiceItemRepository;
 import com.insideinvoice.invoice.repository.InvoiceRepository;
@@ -44,6 +47,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final InvoiceItemRepository invoiceItemRepository;
     private final CustomerRepository customerRepository;
+    private final BusinessRepository businessRepository;
     private final InvoiceMapper invoiceMapper;
     private final InvoiceNumberGenerator invoiceNumberGenerator;
     private final PaymentRepository paymentRepository;
@@ -94,6 +98,17 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         Invoice invoice = invoiceMapper.toEntity(request, invoiceNumber, businessId, userId);
+        // Tax mode: explicit selection is validated and stored as-is; absent ->
+        // derive the legally applicable mode from supplier state vs place of
+        // supply (stays NULL when undeterminable — never a blind assignment).
+        TaxMode requestedTaxMode = parseTaxMode(request.getTaxMode());
+        if (requestedTaxMode != null) {
+            invoice.setTaxMode(requestedTaxMode);
+        } else {
+            String supplierState = businessRepository.findById(businessId)
+                    .map(Business::getState).orElse(null);
+            invoice.setTaxMode(TaxMode.defaultForSave(supplierState, request.getPlaceOfSupply()));
+        }
         invoice = invoiceRepository.save(invoice);
 
         log.info("Invoice created: {} for businessId: {}", invoice.getInvoiceNumber(), businessId);
@@ -215,6 +230,13 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setOtherReferences(request.getOtherReferences());
         invoice.setDestination(request.getDestination());
         invoice.setPaymentMode(request.getPaymentMode());
+        // Tax mode: present -> validated and stored; absent -> keep the stored
+        // selection (same absent = keep contract as invoiceNumber, so a legacy
+        // client can never wipe the owner's choice on an unrelated edit).
+        TaxMode requestedTaxMode = parseTaxMode(request.getTaxMode());
+        if (requestedTaxMode != null) {
+            invoice.setTaxMode(requestedTaxMode);
+        }
         invoice.setBillingMode(BillingMode.fromRaw(request.getBillingMode()));
         invoice.setDiscountPercent(request.getDiscountPercent() != null ? request.getDiscountPercent() : BigDecimal.ZERO);
 
@@ -277,6 +299,13 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setOtherReferences(request.getOtherReferences());
         invoice.setDestination(request.getDestination());
         invoice.setPaymentMode(request.getPaymentMode());
+        // Tax mode: present -> validated and stored; absent -> keep the stored
+        // selection (same absent = keep contract as invoiceNumber, so a legacy
+        // client can never wipe the owner's choice on an unrelated edit).
+        TaxMode requestedTaxMode = parseTaxMode(request.getTaxMode());
+        if (requestedTaxMode != null) {
+            invoice.setTaxMode(requestedTaxMode);
+        }
         invoice.setBillingMode(BillingMode.fromRaw(request.getBillingMode()));
         invoice.setDiscountPercent(request.getDiscountPercent() != null ? request.getDiscountPercent() : BigDecimal.ZERO);
 
@@ -313,6 +342,24 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoiceRepository.delete(invoice);
 
         log.info("Invoice deleted: {} for businessId: {}", id, businessId);
+    }
+
+    /**
+     * Parses the optional invoice tax mode. Absent/blank -> {@code null}
+     * (caller keeps the stored value on update, derives the default on
+     * create); a present but unknown value is a validation failure instead of
+     * a silent drop — a mistyped mode must never change tax presentation
+     * behind the user's back.
+     */
+    private TaxMode parseTaxMode(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        TaxMode mode = TaxMode.fromRaw(raw);
+        if (mode == null) {
+            throw new BadRequestException("Invalid tax mode: " + raw + " (expected CGST_SGST or IGST)");
+        }
+        return mode;
     }
 
     /**

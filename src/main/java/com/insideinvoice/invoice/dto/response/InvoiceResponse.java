@@ -62,6 +62,11 @@ public class InvoiceResponse {
     private String paymentMode;
     /** Construction billing representation (COMPLETE_PROJECT / ITEMIZED); null = standard. */
     private String billingMode;
+    /**
+     * Invoice-level GST tax mode (CGST_SGST / IGST); null = not recorded
+     * (legacy rows — renderers fall back to the place-of-supply heuristic).
+     */
+    private String taxMode;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<InvoiceItemResponse> items;

@@ -7,6 +7,7 @@ import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.entity.InvoiceItem;
 import com.insideinvoice.invoice.entity.InvoiceType;
+import com.insideinvoice.invoice.entity.TaxMode;
 import com.insideinvoice.labels.renderer.PdfCanvas;
 import org.springframework.stereotype.Service;
 
@@ -23,8 +24,10 @@ import java.util.Locale;
  * persisted: bytes are generated per request and the document is closed afterwards.
  *
  * <p>All monetary values are the persisted invoice figures (subtotal / taxAmount /
- * grandTotal and per-item columns); no tax is recomputed. The CGST/SGST display split
- * mirrors the existing invoice templates (equal halves of the stored tax amount).</p>
+ * grandTotal and per-item columns); no tax is recomputed. The tax breakdown mirrors
+ * the invoice's stored mode: a single IGST row for inter-state invoices, equal
+ * CGST/SGST halves of the stored tax for intra-state ones — legacy rows without a
+ * stored mode follow the existing place-of-supply vs business-state heuristic.</p>
  */
 @Service
 public class PublicInvoicePdfService {
@@ -73,7 +76,7 @@ public class PublicInvoicePdfService {
             y = drawBuyer(c, customer, y);
             y = drawItemsTable(c, invoice, y, showHnSac);
             y = ensureRoomForTotals(c, invoice, y);
-            y = drawTotals(c, invoice, y);
+            y = drawTotals(c, invoice, business, y);
             y = drawAmountInWords(c, invoice, y);
             y = drawTerms(c, invoice, business, y);
             drawPaymentBox(c, business, y);
@@ -291,17 +294,26 @@ public class PublicInvoicePdfService {
         return startPage(c, "Invoice " + invoice.getInvoiceNumber() + " (continued)");
     }
 
-    private double drawTotals(PdfCanvas c, Invoice invoice, double y) throws IOException {
+    private double drawTotals(PdfCanvas c, Invoice invoice, Business business, double y) throws IOException {
         double boxW = 86;
         double x = M + CONTENT_W - boxW;
         BigDecimal tax = nz(invoice.getTaxAmount());
-        BigDecimal half = tax.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+        TaxMode mode = TaxMode.resolveForDisplay(invoice.getTaxMode(),
+                business == null ? null : business.getState(), invoice.getPlaceOfSupply());
 
         double rowH = 6;
         double startY = y;
         y = totalRow(c, x, boxW, y, rowH, "Taxable Value", num(invoice.getSubtotal()), false, false);
-        y = totalRow(c, x, boxW, y, rowH, "CGST", num(half), false, false);
-        y = totalRow(c, x, boxW, y, rowH, "SGST", num(half), false, false);
+        if (mode == TaxMode.IGST) {
+            // Inter-state: one full-rate row — no CGST/SGST legs beside it.
+            y = totalRow(c, x, boxW, y, rowH, "IGST", num(tax), false, false);
+        } else {
+            // Intra-state split; residual paisa goes to SGST so the legs foot
+            // to the stored tax exactly (same rule as the templates/email).
+            BigDecimal half = tax.divide(BigDecimal.valueOf(2), 2, RoundingMode.HALF_UP);
+            y = totalRow(c, x, boxW, y, rowH, "CGST", num(half), false, false);
+            y = totalRow(c, x, boxW, y, rowH, "SGST", num(tax.subtract(half)), false, false);
+        }
         y = totalRow(c, x, boxW, y, rowH + 1.5, "Grand Total", num(invoice.getGrandTotal()), true, true);
 
         c.strokeRgb(30, 41, 59);

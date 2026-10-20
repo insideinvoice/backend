@@ -37,17 +37,50 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             nativeQuery = true)
     List<Object[]> periodTotalsSince(@Param("cutoff") OffsetDateTime cutoff);
 
-    /** Platform-wide latest invoice timestamp per user id (rows only for users who created invoices). */
-    @Query("SELECT i.createdBy, MAX(i.createdAt) FROM Invoice i WHERE i.createdBy IS NOT NULL GROUP BY i.createdBy")
-    List<Object[]> lastActivityByUser();
+    /**
+     * Last-activity per user scoped to ONE page of users. The old platform-wide
+     * GROUP BY (every {@code GET /admin/users}) scanned the whole invoices table
+     * to decorate ≤25 rows; this bounded variant rides
+     * {@code idx_invoices_created_by_created_at} instead.
+     */
+    @Query("SELECT i.createdBy, MAX(i.createdAt) FROM Invoice i "
+            + "WHERE i.createdBy IS NOT NULL AND i.createdBy IN :userIds GROUP BY i.createdBy")
+    List<Object[]> lastActivityForUsers(@Param("userIds") java.util.Collection<Long> userIds);
 
     /** Monthly invoice counts for ONE business since cutoff (row 0 = month timestamp). Admin "my invoices" chart. */
     @Query(value = "SELECT DATE_TRUNC('month', created_at) AS m, COUNT(*) FROM invoices "
             + "WHERE business_id = :businessId AND created_at >= :cutoff GROUP BY 1 ORDER BY 1", nativeQuery = true)
     List<Object[]> monthlyCountByBusiness(@Param("businessId") Long businessId, @Param("cutoff") OffsetDateTime cutoff);
 
-    @Query("SELECT DISTINCT i FROM Invoice i LEFT JOIN FETCH i.items WHERE i.businessId = :businessId")
-    List<Invoice> findAllByBusinessId(@Param("businessId") Long businessId);
+    /**
+     * Cross-tenant admin invoice list in ONE query: joins customer/business/owner
+     * names for both search and display, ordered by created_at DESC for the page
+     * index. The Pageable must carry no Sort — ORDER BY lives in the SQL so native
+     * property translation is never needed. {@code q} matches invoice number,
+     * customer name and business name (trigram-indexed columns, V35).
+     */
+    @Query(value = "SELECT i.* FROM invoices i "
+            + "LEFT JOIN customers c ON c.id = i.customer_id "
+            + "LEFT JOIN businesses b ON b.id = i.business_id "
+            + "WHERE (:q = '' "
+            + "OR LOWER(i.invoice_number) LIKE LOWER('%' || :q || '%') "
+            + "OR LOWER(c.name) LIKE LOWER('%' || :q || '%') "
+            + "OR LOWER(b.business_name) LIKE LOWER('%' || :q || '%')) "
+            + "ORDER BY i.created_at DESC",
+            countQuery = "SELECT COUNT(*) FROM invoices i "
+                    + "LEFT JOIN customers c ON c.id = i.customer_id "
+                    + "LEFT JOIN businesses b ON b.id = i.business_id "
+                    + "WHERE (:q = '' "
+                    + "OR LOWER(i.invoice_number) LIKE LOWER('%' || :q || '%') "
+                    + "OR LOWER(c.name) LIKE LOWER('%' || :q || '%') "
+                    + "OR LOWER(b.business_name) LIKE LOWER('%' || :q || '%'))",
+            nativeQuery = true)
+    Page<Invoice> searchAll(@Param("q") String q, Pageable pageable);
+
+    /** Admin workspace list: one business's invoices with optional invoice-number search. */
+    @Query("SELECT i FROM Invoice i WHERE i.businessId = :businessId "
+            + "AND (:q = '' OR LOWER(i.invoiceNumber) LIKE LOWER(CONCAT('%', :q, '%')))")
+    Page<Invoice> searchByBusinessId(@Param("businessId") Long businessId, @Param("q") String q, Pageable pageable);
 
     Optional<Invoice> findByIdAndBusinessId(Long id, Long businessId);
 

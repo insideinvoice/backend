@@ -171,6 +171,16 @@ public class Invoice extends BaseEntity {
     @Column(name = "billing_mode", length = 20)
     private BillingMode billingMode;
 
+    /**
+     * Invoice-level GST tax mode (V34): CGST_SGST (intra-state) or IGST
+     * (inter-state). NULL = not recorded (every legacy row) — resolved at
+     * render time from place of supply vs business state; the migration
+     * never backfills and totals are unaffected either way.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tax_mode", length = 20)
+    private TaxMode taxMode;
+
     /** Opaque public share token (base64url of 256 random bits). NULL = never shared. */
     @Column(name = "share_token", length = 64, unique = true)
     private String shareToken;

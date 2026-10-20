@@ -108,6 +108,15 @@ public class CreateInvoiceRequest implements InvoiceExtendedFields {
     @Size(max = 20, message = "Billing mode must not exceed 20 characters")
     private String billingMode;
 
+    /**
+     * Invoice-level GST tax mode: CGST_SGST (intra-state) or IGST
+     * (inter-state). Optional — absent means "derive it from the supplier
+     * state vs place of supply" (or leave it unrecorded when undeterminable).
+     * Never affects the stored totals: the total tax is mode-independent.
+     */
+    @Size(max = 20, message = "Tax mode must not exceed 20 characters")
+    private String taxMode;
+
     @jakarta.validation.constraints.DecimalMin(value = "0", message = "Discount percent must be >= 0")
     @jakarta.validation.constraints.DecimalMax(value = "100", message = "Discount percent must be <= 100")
     private java.math.BigDecimal discountPercent;

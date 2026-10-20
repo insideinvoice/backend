@@ -210,6 +210,7 @@ public class InvoiceMapper {
                 .paymentMode(invoice.getPaymentMode())
                 .discountPercent(invoice.getDiscountPercent())
                 .billingMode(invoice.getBillingMode() == null ? null : invoice.getBillingMode().name())
+                .taxMode(invoice.getTaxMode() == null ? null : invoice.getTaxMode().name())
                 .createdBy(invoice.getCreatedBy())
                 .createdAt(invoice.getCreatedAt())
                 .updatedAt(invoice.getUpdatedAt())
