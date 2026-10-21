@@ -154,7 +154,12 @@ public class InvoiceMapper {
     }
 
     public InvoiceResponse toResponse(Invoice invoice, String customerName) {
-        return toResponse(invoice, customerName, invoice.getItems());
+        return toResponse(invoice, customerName, null, invoice.getItems());
+    }
+
+    /** Same as {@link #toResponse(Invoice, String)} with the customer's phone on the row. */
+    public InvoiceResponse toResponse(Invoice invoice, String customerName, String customerPhone) {
+        return toResponse(invoice, customerName, customerPhone, invoice.getItems());
     }
 
     /**
@@ -163,6 +168,14 @@ public class InvoiceMapper {
      * collection is never touched (no N+1).
      */
     public InvoiceResponse toResponse(Invoice invoice, String customerName, List<InvoiceItem> items) {
+        return toResponse(invoice, customerName, null, items);
+    }
+
+    /**
+     * Full mapping: batch-loaded items plus the customer's phone (from the customer
+     * the caller already loaded — never an extra per-invoice lookup).
+     */
+    public InvoiceResponse toResponse(Invoice invoice, String customerName, String customerPhone, List<InvoiceItem> items) {
         List<InvoiceItemResponse> itemResponses = items.stream()
                 .map(this::toItemResponse)
                 .toList();
@@ -174,6 +187,7 @@ public class InvoiceMapper {
                 .invoiceType(invoice.getInvoiceType().name())
                 .customerId(invoice.getCustomerId())
                 .customerName(customerName)
+                .customerPhone(customerPhone)
                 .invoiceDate(invoice.getInvoiceDate())
                 .dueDate(invoice.getDueDate())
                 .subtotal(invoice.getSubtotal())

@@ -112,7 +112,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice = invoiceRepository.save(invoice);
 
         log.info("Invoice created: {} for businessId: {}", invoice.getInvoiceNumber(), businessId);
-        return invoiceMapper.toResponse(invoice, customer.getName());
+        return invoiceMapper.toResponse(invoice, customer.getName(), customer.getPhone());
     }
 
     @Override
@@ -130,10 +130,17 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .filter(java.util.Objects::nonNull)
                 .collect(java.util.stream.Collectors.toSet());
 
-        java.util.Map<Long, String> customerNames = customerIds.isEmpty()
-                ? java.util.Map.of()
-                : customerRepository.findByIdInAndBusinessId(customerIds, businessId).stream()
-                        .collect(java.util.stream.Collectors.toMap(Customer::getId, Customer::getName, (a, b) -> a));
+        List<Customer> customers = customerIds.isEmpty()
+                ? java.util.List.of()
+                : customerRepository.findByIdInAndBusinessId(customerIds, businessId);
+
+        java.util.Map<Long, String> customerNames = customers.stream()
+                .collect(java.util.stream.Collectors.toMap(Customer::getId, Customer::getName, (a, b) -> a));
+
+        // Phones ride the same batch — the list's SMS share reads customerPhone off the row.
+        java.util.Map<Long, String> customerPhones = customers.stream()
+                .filter(c -> c.getPhone() != null && !c.getPhone().isBlank())
+                .collect(java.util.stream.Collectors.toMap(Customer::getId, Customer::getPhone, (a, b) -> a));
 
         // Batch-load items for the whole page in ONE query instead of letting the
         // mapper lazily fetch them per invoice (N+1).
@@ -151,7 +158,8 @@ public class InvoiceServiceImpl implements InvoiceService {
                             String customerName = customerNames.getOrDefault(invoice.getCustomerId(), "Unknown");
                             java.util.List<com.insideinvoice.invoice.entity.InvoiceItem> items =
                                     itemsByInvoice.getOrDefault(invoice.getId(), java.util.List.of());
-                            return invoiceMapper.toResponse(invoice, customerName, items);
+                            return invoiceMapper.toResponse(invoice, customerName,
+                                    customerPhones.get(invoice.getCustomerId()), items);
                         })
                         .toList())
                 .page(invoices.getNumber())
@@ -169,8 +177,9 @@ public class InvoiceServiceImpl implements InvoiceService {
         Invoice invoice = invoiceRepository.findByIdAndBusinessIdWithItems(id, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
 
-        String customerName = getCustomerName(invoice.getCustomerId(), businessId);
-        return invoiceMapper.toResponse(invoice, customerName);
+        Customer customer = customerRepository.findByIdAndBusinessId(invoice.getCustomerId(), businessId).orElse(null);
+        String customerName = customer != null ? customer.getName() : "Unknown";
+        return invoiceMapper.toResponse(invoice, customerName, customer != null ? customer.getPhone() : null);
     }
 
     @Override
@@ -179,10 +188,9 @@ public class InvoiceServiceImpl implements InvoiceService {
         Invoice invoice = invoiceRepository.findByIdWithItems(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
 
-        String customerName = customerRepository.findById(invoice.getCustomerId())
-                .map(Customer::getName)
-                .orElse("Unknown");
-        return invoiceMapper.toResponse(invoice, customerName);
+        Customer customer = customerRepository.findById(invoice.getCustomerId()).orElse(null);
+        String customerName = customer != null ? customer.getName() : "Unknown";
+        return invoiceMapper.toResponse(invoice, customerName, customer != null ? customer.getPhone() : null);
     }
 
     @Override
@@ -249,7 +257,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice = invoiceRepository.save(invoice);
 
         log.info("Invoice updated by admin: {}", invoice.getInvoiceNumber());
-        return invoiceMapper.toResponse(invoice, customer.getName());
+        return invoiceMapper.toResponse(invoice, customer.getName(), customer.getPhone());
     }
 
     @Override
@@ -318,7 +326,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice = invoiceRepository.save(invoice);
 
         log.info("Invoice updated: {} for businessId: {}", invoice.getInvoiceNumber(), businessId);
-        return invoiceMapper.toResponse(invoice, customer.getName());
+        return invoiceMapper.toResponse(invoice, customer.getName(), customer.getPhone());
     }
 
     @Override
@@ -404,11 +412,5 @@ public class InvoiceServiceImpl implements InvoiceService {
                 && request.getBillingPeriodEnd().isBefore(request.getBillingPeriodStart())) {
             throw new BadRequestException("Billing period end date cannot be before the billing period start date");
         }
-    }
-
-    private String getCustomerName(Long customerId, Long businessId) {
-        return customerRepository.findByIdAndBusinessId(customerId, businessId)
-                .map(Customer::getName)
-                .orElse("Unknown");
     }
 }

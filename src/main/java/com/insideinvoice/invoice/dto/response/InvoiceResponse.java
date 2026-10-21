@@ -24,6 +24,12 @@ public class InvoiceResponse {
     private String invoiceType;
     private Long customerId;
     private String customerName;
+    /**
+     * Phone of the linked customer record, carried on the row so the list screen's
+     * share-by-SMS reads it directly (the invoice only stores customerId). Null when
+     * the customer has no phone on file.
+     */
+    private String customerPhone;
     private LocalDate invoiceDate;
     private LocalDate dueDate;
     private BigDecimal subtotal;
