@@ -11,8 +11,6 @@ import com.insideinvoice.invoice.service.InvoiceImportService;
 import com.insideinvoice.invoice.service.InvoiceService;
 import com.insideinvoice.invoice.share.InvoiceEmailService;
 import com.insideinvoice.invoice.share.InvoiceShareService;
-import com.insideinvoice.invoice.share.dto.InvoiceEmailQueueResponse;
-import com.insideinvoice.invoice.share.dto.InvoiceEmailStatusResponse;
 import com.insideinvoice.invoice.share.dto.ShareLinkResponse;
 import com.insideinvoice.security.CurrentUser;
 import com.insideinvoice.security.UserPrincipal;
@@ -145,34 +143,19 @@ public class InvoiceController {
     }
 
     @PostMapping(value = "/{id}/email", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Queue the invoice email (PDF + share link) for asynchronous delivery",
-            description = "Validates synchronously (401/404/400), mints the share link, then queues the "
-                    + "provider call and returns 200 immediately with data.status=PENDING. "
-                    + "Poll GET /{id}/email-status for the terminal SENT/FAILED state.")
-    public ResponseEntity<ApiResponse<InvoiceEmailQueueResponse>> sendInvoiceEmail(
+    @Operation(summary = "Email the invoice, its PDF and its share link to the customer")
+    public ResponseEntity<ApiResponse<Void>> sendInvoiceEmail(
             @PathVariable Long id,
             @RequestParam(name = "frontendOrigin", required = false) String frontendOrigin,
             @RequestPart(name = "pdf", required = false) MultipartFile pdf,
             @CurrentUser UserPrincipal currentUser) throws java.io.IOException {
         // The PDF is rendered in the browser (seal/stamp included) and attached so
         // the emailed document matches what the user downloads. Optional: a missing
-        // or invalid file still sends the email with its share link. The bytes are
-        // read HERE — the async worker only ever sees plain byte[].
+        // or invalid file still sends the email with its share link.
         byte[] pdfBytes = (pdf != null && !pdf.isEmpty()) ? pdf.getBytes() : null;
-        InvoiceEmailQueueResponse queued = invoiceEmailService.queueInvoiceEmail(
+        String recipient = invoiceEmailService.sendInvoiceEmail(
                 id, currentUser.getBusinessId(), frontendOrigin,
                 pdfBytes, pdf != null ? pdf.getOriginalFilename() : null);
-        return ResponseEntity.ok(ApiResponse.success(
-                "Invoice email queued for " + queued.recipient(), queued));
-    }
-
-    @GetMapping("/{id}/email-status")
-    @Operation(summary = "Async email delivery status for an invoice",
-            description = "PENDING (queued/never queued), SENT (emailedAt set) or FAILED (error set).")
-    public ResponseEntity<ApiResponse<InvoiceEmailStatusResponse>> getInvoiceEmailStatus(
-            @PathVariable Long id,
-            @CurrentUser UserPrincipal currentUser) {
-        InvoiceEmailStatusResponse status = invoiceEmailService.getEmailStatus(id, currentUser.getBusinessId());
-        return ResponseEntity.ok(ApiResponse.success("Invoice email status retrieved", status));
+        return ResponseEntity.ok(ApiResponse.success("Invoice email sent to " + recipient));
     }
 }

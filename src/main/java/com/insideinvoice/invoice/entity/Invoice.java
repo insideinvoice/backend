@@ -181,20 +181,6 @@ public class Invoice extends BaseEntity {
     @Column(name = "tax_mode", length = 20)
     private TaxMode taxMode;
 
-    /* ---- V36: async invoice email tracking ----
-     * email_status NULL = never queued. PENDING once the send is handed to the
-     * async pool, then SENT (emailed_at set) or FAILED (email_error set). */
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "email_status", length = 20)
-    private InvoiceEmailStatus emailStatus;
-
-    @Column(name = "email_error", length = 500)
-    private String emailError;
-
-    @Column(name = "emailed_at")
-    private java.time.LocalDateTime emailedAt;
-
     /** Opaque public share token (base64url of 256 random bits). NULL = never shared. */
     @Column(name = "share_token", length = 64, unique = true)
     private String shareToken;

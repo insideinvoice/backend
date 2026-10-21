@@ -5,11 +5,11 @@ import com.insideinvoice.business.repository.BusinessRepository;
 import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.customer.repository.CustomerRepository;
 import com.insideinvoice.email.EmailAttachment;
+import com.insideinvoice.email.EmailService;
 import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.repository.InvoiceRepository;
-import com.insideinvoice.invoice.share.dto.InvoiceEmailQueueResponse;
 import com.insideinvoice.invoice.share.dto.ShareLinkResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,18 +17,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * Prepares an invoice email and QUEUES it for asynchronous delivery, always
- * carrying a working public share link (the link is created on demand).
- * Ownership comes exclusively from the authenticated business id — never from
- * the request.
+ * Sends an invoice to the customer by email, always carrying a working public
+ * share link (the link is created on demand). Ownership comes exclusively from
+ * the authenticated business id — never from the request.
  *
- * <p>Everything expensive or failure-prone for the USER runs SYNCHRONOUSLY
- * here: 404/400 validation, the share-link mint (its own committed transaction
- * inside {@link InvoiceShareService}) and the HTML/PDF assembly. The provider
- * HTTP call is handed off to {@link InvoiceEmailDispatcher} (a separate bean —
- * @Async self-invocation would run inline) AFTER {@code email_status=PENDING}
- * is committed, so the async task never waits on this request's transaction
- * and a provider failure can never roll anything back.</p>
+ * <p>No transaction wraps the outbound HTTP call: the share link commits first
+ * (its own transaction inside {@link InvoiceShareService}), items are initialized
+ * via join fetch, and email failures surface as {@code EmailDeliveryException}
+ * without rolling anything back.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -42,8 +38,7 @@ public class InvoiceEmailService {
     private final CustomerRepository customerRepository;
     private final BusinessRepository businessRepository;
     private final InvoiceShareService invoiceShareService;
-    private final InvoiceEmailDispatcher emailDispatcher;
-    private final InvoiceEmailStatusService emailStatusService;
+    private final EmailService emailService;
 
     @Value("${app.frontend-base-url:https://insideinvoice.in}")
     private String defaultFrontendBaseUrl;
@@ -52,23 +47,21 @@ public class InvoiceEmailService {
     private String sellerLogoUrl;
 
     /**
-     * @return the queue receipt (PENDING + recipient) the endpoint returns
+     * @return the recipient address the invoice was sent to
      */
-    public InvoiceEmailQueueResponse queueInvoiceEmail(Long invoiceId, Long businessId, String frontendOrigin) {
-        return queueInvoiceEmail(invoiceId, businessId, frontendOrigin, null, null);
+    public String sendInvoiceEmail(Long invoiceId, Long businessId, String frontendOrigin) {
+        return sendInvoiceEmail(invoiceId, businessId, frontendOrigin, null, null);
     }
 
     /**
      * @param pdfAttachment optional client-rendered PDF of the invoice (seal/stamp
      *                      already applied by the browser). When present it is
      *                      attached so the emailed document is byte-identical to
-     *                      what the user downloads. The BYTES are read off the
-     *                      request before this method is called — a MultipartFile
-     *                      must never cross the async thread boundary.
-     * @return the queue receipt (PENDING + recipient) the endpoint returns
+     *                      what the user downloads.
+     * @return the recipient address the invoice was sent to
      */
-    public InvoiceEmailQueueResponse queueInvoiceEmail(Long invoiceId, Long businessId, String frontendOrigin,
-                                                       byte[] pdfAttachment, String pdfFilename) {
+    public String sendInvoiceEmail(Long invoiceId, Long businessId, String frontendOrigin,
+                                   byte[] pdfAttachment, String pdfFilename) {
         Invoice invoice = invoiceRepository.findByIdAndBusinessIdWithItems(invoiceId, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
 
@@ -85,8 +78,6 @@ public class InvoiceEmailService {
         String base = resolveFrontendBase(frontendOrigin);
 
         // The email must never ship a dead link: create one if absent or revoked.
-        // createOrRetrieve commits in its OWN transaction, so the token is durable
-        // the moment this line returns.
         ShareLinkResponse share = invoiceShareService.createOrRetrieve(invoiceId, businessId);
         String shareUrl = base + "/i/" + share.getToken();
 
@@ -97,33 +88,19 @@ public class InvoiceEmailService {
         // Two parts when both exist: the client PDF + the seller logo as an
         // INLINE content-id part so the email header shows the ACTUAL uploaded
         // logo (data: URIs are stripped by Gmail, static config URLs go stale).
-        EmailAttachment logoAttachment = logoAttachment(business.getLogo());
-        java.util.List<EmailAttachment> parts = new java.util.ArrayList<>();
-        EmailAttachment pdf = toPdfAttachment(pdfAttachment, pdfFilename, invoice.getInvoiceNumber());
+        com.insideinvoice.email.EmailAttachment logoAttachment = logoAttachment(business.getLogo());
+        java.util.List<com.insideinvoice.email.EmailAttachment> parts = new java.util.ArrayList<>();
+        com.insideinvoice.email.EmailAttachment pdf = toPdfAttachment(pdfAttachment, pdfFilename, invoice.getInvoiceNumber());
         if (pdf != null) parts.add(pdf);
         if (logoAttachment != null) parts.add(logoAttachment);
-
-        // Persist PENDING in its OWN committed transaction BEFORE handing off:
-        // the response promises "queued", and the async worker (or a poller of
-        // GET /email-status) must see it without joining this request's work.
-        String recipient = customer.getEmail().trim();
-        emailStatusService.markPending(invoiceId);
-
-        InvoiceEmailJob job = new InvoiceEmailJob(invoiceId, recipient, fromName,
+        emailService.sendHtmlEmail(fromName, customer.getEmail().trim(),
                 content.subject(), content.html(), content.text(),
-                notBlank(business.getEmail()) ? business.getEmail().trim() : null,
-                java.util.List.copyOf(parts));
-        emailDispatcher.sendAsync(job);
+                notBlank(business.getEmail()) ? business.getEmail().trim() : null, parts);
 
-        log.info("Invoice email queued | invoice: {} | to: {} | parts: {}",
-                invoice.getInvoiceNumber(), recipient,
+        log.info("Invoice email sent | invoice: {} | to: {} | parts: {}",
+                invoice.getInvoiceNumber(), customer.getEmail(),
                 (pdf != null ? "pdf" : "-") + (logoAttachment != null ? "+logo" : ""));
-        return InvoiceEmailQueueResponse.pending(recipient);
-    }
-
-    /** Cross-tenant-safe read of the async send state for GET /email-status. */
-    public com.insideinvoice.invoice.share.dto.InvoiceEmailStatusResponse getEmailStatus(Long invoiceId, Long businessId) {
-        return emailStatusService.getStatus(invoiceId, businessId);
+        return customer.getEmail().trim();
     }
 
     /**
