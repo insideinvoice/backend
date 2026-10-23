@@ -40,6 +40,14 @@ public class BusinessServiceImpl implements BusinessService {
     private static final double DEFAULT_RIGHT_MM = 10.0;
     private static final double DEFAULT_BOTTOM_MM = 8.0;
 
+    // A4 portrait in millimetres. Edge offsets are measured from the paper's
+    // right/bottom edge, so a seal can only travel as far as the page minus its
+    // own footprint before it starts hanging off the sheet. The frontend clamps
+    // the same way (SEAL_PAGE / sealEdgeRange) — keep the two in step.
+    private static final double PAGE_W_MM = 210.0;
+    private static final double PAGE_H_MM = 297.0;
+    private static final double STAMP_ASPECT_H = 0.4; // rubber stamp is 2.5:1
+
     private final BusinessRepository businessRepository;
     private final UserRepository userRepository;
     private final BusinessMapper businessMapper;
@@ -197,7 +205,10 @@ public class BusinessServiceImpl implements BusinessService {
     private String normaliseSealConfig(SealConfig incoming, String existingJson) {
         SealConfig base = readSealConfig(existingJson);
         SealConfig merged = SealConfig.builder()
-                .allPages(pickBoolean(incoming.getAllPages(), base.getAllPages(), true))
+                // Default OFF: a fresh business stamps only the final page (the
+                // one carrying the grand total + signature). Owners opt into
+                // repeating the mark on every continuation page.
+                .allPages(pickBoolean(incoming.getAllPages(), base.getAllPages(), false))
                 .round(mergeVariant(base.getRound(), incoming.getRound(), true))
                 .stamp(mergeVariant(base.getStamp(), incoming.getStamp(), false))
                 .build();
@@ -233,13 +244,17 @@ public class BusinessServiceImpl implements BusinessService {
         double bottom = pick(incoming == null ? null : incoming.getBottomMm(),
                 current == null ? null : current.getBottomMm(), DEFAULT_BOTTOM_MM);
 
+        double sizeMm = roundTo2(clamp(size, round ? 5 : 10, round ? 120 : 180));
+        // The stamp's height follows its 2.5:1 artwork aspect; the round seal is
+        // square. Travel is capped by the page minus that footprint, so the mark
+        // can reach every point of the sheet but never leaves it.
+        double boxH = round ? sizeMm : sizeMm * STAMP_ASPECT_H;
+
         return SealConfig.Variant.builder()
-                // the round seal is square; the rubber stamp's height is derived
-                // from this width by the 2.5:1 artwork aspect in the frontend
-                .sizeMm(roundTo2(clamp(size, round ? 5 : 10, round ? 120 : 180)))
+                .sizeMm(sizeMm)
                 .tilt(roundTo2(clamp(tilt, -45, 45)))
-                .rightMm(roundTo2(clamp(right, 0, 100)))
-                .bottomMm(roundTo2(clamp(bottom, 0, 100)))
+                .rightMm(roundTo2(clamp(right, 0, Math.max(0, PAGE_W_MM - sizeMm))))
+                .bottomMm(roundTo2(clamp(bottom, 0, Math.max(0, PAGE_H_MM - boxH))))
                 .build();
     }
 
