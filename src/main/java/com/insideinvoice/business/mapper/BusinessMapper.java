@@ -71,6 +71,11 @@ public class BusinessMapper {
                 .printSettings(business.getPrintSettings())
                 .industry(Industry.resolve(business.getIndustry()).getId())
                 .showHnSac(business.getShowHnSac() == null || business.getShowHnSac())
+                .sealEnabled(Boolean.TRUE.equals(business.getSealEnabled()))
+                .sealType(business.getSealType() == null || business.getSealType().isBlank()
+                        ? "round"
+                        : business.getSealType())
+                .sealConfig(business.getSealConfig())
                 .industryConfig(IndustryConfigResponse.from(
                         IndustryRegistry.forRawIndustry(business.getIndustry())))
                 .createdAt(business.getCreatedAt())

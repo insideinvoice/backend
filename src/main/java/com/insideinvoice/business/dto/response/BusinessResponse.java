@@ -54,6 +54,12 @@ public class BusinessResponse {
     /** Seal variant: "round" or "stamp". */
     private String sealType;
 
+    /**
+     * Serialised seal placement/size/tilt per variant (JSON), or null when the
+     * business still uses the built-in defaults.
+     */
+    private String sealConfig;
+
     /** Whether the "SUBJECT TO {CITY} JURISDICTION" footer line is rendered. */
     private Boolean jurisdictionEnabled;
 

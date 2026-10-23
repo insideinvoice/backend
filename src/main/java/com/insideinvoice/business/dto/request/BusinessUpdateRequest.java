@@ -88,6 +88,12 @@ public class BusinessUpdateRequest {
     private String sealType;
 
     /**
+     * Seal placement/size/tilt per variant. Null = leave unchanged. Values are
+     * normalised and clamped server-side before being stored as JSON.
+     */
+    private com.insideinvoice.business.dto.SealConfig sealConfig;
+
+    /**
      * Show (TRUE) or hide (FALSE) the "SUBJECT TO {CITY} JURISDICTION" footer
      * line on invoice documents. The Computer Generated notice is independent
      * of this switch. Null = leave unchanged.
