@@ -146,6 +146,7 @@ public class PublicInvoiceAssembler {
                 .showHnSac(b.getShowHnSac() == null || b.getShowHnSac())
                 .sealEnabled(b.getSealEnabled() != null && b.getSealEnabled())
                 .sealType(b.getSealType() == null || b.getSealType().isBlank() ? "round" : b.getSealType())
+                .sealConfig(b.getSealConfig())
                 .jurisdictionEnabled(b.getJurisdictionEnabled() == null || b.getJurisdictionEnabled())
                 .jurisdictionRegion(b.getJurisdictionRegion())
                 .jurisdictionCity(b.getJurisdictionCity())

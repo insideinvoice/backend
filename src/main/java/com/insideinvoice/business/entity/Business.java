@@ -139,6 +139,14 @@ public class Business extends BaseEntity {
     private String sealType = "round";
 
     /**
+     * Configurable seal placement as JSON (see V38): per-variant sizeMm, tilt,
+     * rightMm and bottomMm. NULL means the built-in defaults, so businesses
+     * that never opened the setting keep the historical rendering.
+     */
+    @Column(name = "seal_config", columnDefinition = "TEXT")
+    private String sealConfig;
+
+    /**
      * Configurable "Subject to ... Jurisdiction" footer. TRUE (DB default)
      * preserves the historical rendering, where the line was hardcoded and
      * always shown. FALSE removes the line from newly rendered documents; the

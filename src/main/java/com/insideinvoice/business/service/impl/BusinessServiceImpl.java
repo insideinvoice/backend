@@ -2,6 +2,7 @@ package com.insideinvoice.business.service.impl;
 
 import com.insideinvoice.auth.entity.User;
 import com.insideinvoice.auth.repository.UserRepository;
+import com.insideinvoice.business.dto.SealConfig;
 import com.insideinvoice.business.dto.request.BusinessSetupRequest;
 import com.insideinvoice.business.dto.request.BusinessUpdateRequest;
 import com.insideinvoice.business.dto.request.UpdateInvoiceSettingsRequest;
@@ -15,6 +16,8 @@ import com.insideinvoice.common.IndianRegions;
 import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.DuplicateResourceException;
 import com.insideinvoice.exception.ResourceNotFoundException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,9 +30,20 @@ public class BusinessServiceImpl implements BusinessService {
 
     private static final Logger log = LoggerFactory.getLogger(BusinessServiceImpl.class);
 
+    // Built-in seal defaults: the round seal's historical 80px diameter and
+    // the rubber stamp's 240px width on A4, both bottom-right, with the same
+    // hand-stamped tilts the SVG components use. Values are millimetres.
+    private static final double DEFAULT_ROUND_SIZE_MM = 21.0;
+    private static final double DEFAULT_STAMP_SIZE_MM = 64.0;
+    private static final double DEFAULT_ROUND_TILT_DEG = -8.0;
+    private static final double DEFAULT_STAMP_TILT_DEG = -6.0;
+    private static final double DEFAULT_RIGHT_MM = 10.0;
+    private static final double DEFAULT_BOTTOM_MM = 8.0;
+
     private final BusinessRepository businessRepository;
     private final UserRepository userRepository;
     private final BusinessMapper businessMapper;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -120,6 +134,12 @@ public class BusinessServiceImpl implements BusinessService {
         if (request.getSealType() != null && !request.getSealType().isBlank()) {
             business.setSealType("stamp".equalsIgnoreCase(request.getSealType().trim()) ? "stamp" : "round");
         }
+        // Seal placement/size/tilt: null = leave unchanged. Existing values are
+        // merged with the incoming ones (a partial payload only moves the
+        // fields it sends), then clamped and stored as canonical JSON.
+        if (request.getSealConfig() != null) {
+            business.setSealConfig(normaliseSealConfig(request.getSealConfig(), business.getSealConfig()));
+        }
 
         // Invoice jurisdiction footer: null = leave unchanged (older clients).
         // Shared with the onboarding setup path so both flows validate exactly
@@ -166,6 +186,81 @@ public class BusinessServiceImpl implements BusinessService {
             throw new BadRequestException(
                     "Jurisdiction city is required when the jurisdiction line is shown on invoices.");
         }
+    }
+
+    /**
+     * Merges incoming seal placement into the stored configuration and returns
+     * canonical JSON. Every variant always ends up with all four values so the
+     * renderers never have to guess; values are clamped to sensible page-safe
+     * ranges (a seal larger than the page or a 400° tilt is never useful).
+     */
+    private String normaliseSealConfig(SealConfig incoming, String existingJson) {
+        SealConfig base = readSealConfig(existingJson);
+        SealConfig merged = SealConfig.builder()
+                .allPages(pickBoolean(incoming.getAllPages(), base.getAllPages(), true))
+                .round(mergeVariant(base.getRound(), incoming.getRound(), true))
+                .stamp(mergeVariant(base.getStamp(), incoming.getStamp(), false))
+                .build();
+        try {
+            return objectMapper.writeValueAsString(merged);
+        } catch (JsonProcessingException e) {
+            throw new BadRequestException("Invalid seal configuration.");
+        }
+    }
+
+    private SealConfig readSealConfig(String json) {
+        if (json == null || json.isBlank()) {
+            return SealConfig.builder().build();
+        }
+        try {
+            return objectMapper.readValue(json, SealConfig.class);
+        } catch (Exception e) {
+            log.warn("Ignoring unreadable seal_config on business: {}", e.getMessage());
+            return SealConfig.builder().build();
+        }
+    }
+
+    private SealConfig.Variant mergeVariant(SealConfig.Variant current, SealConfig.Variant incoming, boolean round) {
+        double defaultSize = round ? DEFAULT_ROUND_SIZE_MM : DEFAULT_STAMP_SIZE_MM;
+        double defaultTilt = round ? DEFAULT_ROUND_TILT_DEG : DEFAULT_STAMP_TILT_DEG;
+
+        double size = pick(incoming == null ? null : incoming.getSizeMm(),
+                current == null ? null : current.getSizeMm(), defaultSize);
+        double tilt = pick(incoming == null ? null : incoming.getTilt(),
+                current == null ? null : current.getTilt(), defaultTilt);
+        double right = pick(incoming == null ? null : incoming.getRightMm(),
+                current == null ? null : current.getRightMm(), DEFAULT_RIGHT_MM);
+        double bottom = pick(incoming == null ? null : incoming.getBottomMm(),
+                current == null ? null : current.getBottomMm(), DEFAULT_BOTTOM_MM);
+
+        return SealConfig.Variant.builder()
+                // the round seal is square; the rubber stamp's height is derived
+                // from this width by the 2.5:1 artwork aspect in the frontend
+                .sizeMm(roundTo2(clamp(size, round ? 5 : 10, round ? 120 : 180)))
+                .tilt(roundTo2(clamp(tilt, -45, 45)))
+                .rightMm(roundTo2(clamp(right, 0, 100)))
+                .bottomMm(roundTo2(clamp(bottom, 0, 100)))
+                .build();
+    }
+
+    private static double pick(Double primary, Double secondary, double fallback) {
+        if (primary != null && Double.isFinite(primary)) return primary;
+        if (secondary != null && Double.isFinite(secondary)) return secondary;
+        return fallback;
+    }
+
+    private static boolean pickBoolean(Boolean primary, Boolean secondary, boolean fallback) {
+        if (primary != null) return primary;
+        if (secondary != null) return secondary;
+        return fallback;
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.min(max, Math.max(min, value));
+    }
+
+    private static double roundTo2(double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 
     @Override

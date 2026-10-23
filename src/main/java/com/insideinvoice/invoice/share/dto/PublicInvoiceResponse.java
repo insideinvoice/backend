@@ -120,6 +120,12 @@ public class PublicInvoiceResponse {
         /** Seal variant: "round" or "stamp". */
         private String sealType;
         /**
+         * Serialised seal placement/size/tilt per variant (JSON). The share page
+         * runs on the customer's device, so the owner's configured position and
+         * size must travel with the payload.
+         */
+        private String sealConfig;
+        /**
          * Configurable jurisdiction footer, mirrored here for the same reason
          * as the seal: the share page renders on the customer's device, so the
          * owner's "Subject to ... Jurisdiction" configuration has to travel
