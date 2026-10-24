@@ -30,4 +30,13 @@ public interface AuthService {
 
     /** Ends every server-side session for the user by rotating their token version. */
     void revokeSessions(Long userId);
+
+    /**
+     * Instagram-style availability probe for the settings / signup username
+     * field. Case-insensitive; blank input is never available.
+     */
+    boolean isUsernameAvailable(String username);
+
+    /** Fresh profile of the signed-in user — keeps the client's stored snapshot current. */
+    com.insideinvoice.auth.dto.response.UserProfileResponse getUserProfile(Long userId);
 }

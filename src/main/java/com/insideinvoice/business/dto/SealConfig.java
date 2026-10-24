@@ -43,5 +43,11 @@ public class SealConfig {
         private Double tilt;
         private Double rightMm;
         private Double bottomMm;
+
+        /**
+         * Ink colour as a #RRGGBB hex string. Null means "keep the current
+         * value / built-in default" so older payloads stay compatible.
+         */
+        private String color;
     }
 }

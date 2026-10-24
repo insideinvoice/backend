@@ -8,6 +8,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -115,4 +117,11 @@ public class BusinessUpdateRequest {
      */
     @Size(max = 120, message = "Jurisdiction city must not exceed 120 characters")
     private String jurisdictionCity;
+
+    /**
+     * Default Terms & Conditions lines rendered on every invoice (max five,
+     * order preserved). Null = leave unchanged; the service trims and drops
+     * blank lines before storing.
+     */
+    private List<String> termsConditions;
 }

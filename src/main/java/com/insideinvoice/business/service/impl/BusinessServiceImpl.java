@@ -40,6 +40,12 @@ public class BusinessServiceImpl implements BusinessService {
     private static final double DEFAULT_RIGHT_MM = 10.0;
     private static final double DEFAULT_BOTTOM_MM = 8.0;
 
+    // Ink colours the SVG components have always used. A missing or malformed
+    // stored colour falls back to these, so a config saved before colour
+    // existed renders exactly as it did before.
+    private static final String DEFAULT_ROUND_COLOR = "#0A4BFF";
+    private static final String DEFAULT_STAMP_COLOR = "#0000CC";
+
     // A4 portrait in millimetres. Edge offsets are measured from the paper's
     // right/bottom edge, so a seal can only travel as far as the page minus its
     // own footprint before it starts hanging off the sheet. The frontend clamps
@@ -149,6 +155,13 @@ public class BusinessServiceImpl implements BusinessService {
             business.setSealConfig(normaliseSealConfig(request.getSealConfig(), business.getSealConfig()));
         }
 
+        // Default Terms & Conditions (V40): null = leave unchanged, an empty
+        // list CLEARS them. Lines are trimmed, blanks dropped and capped at
+        // five before being stored as canonical JSON.
+        if (request.getTermsConditions() != null) {
+            business.setTermsConditions(serializeTermsConditions(request.getTermsConditions()));
+        }
+
         // Invoice jurisdiction footer: null = leave unchanged (older clients).
         // Shared with the onboarding setup path so both flows validate exactly
         // the same way.
@@ -161,6 +174,39 @@ public class BusinessServiceImpl implements BusinessService {
         business = businessRepository.save(business);
         log.info("Business updated: {}", businessId);
         return businessMapper.toResponse(business);
+    }
+
+    /**
+     * Serialises the owner's default Terms & Conditions (V40): trims each
+     * line, drops blank lines, caps at five (the invoice footer renders five)
+     * and converts to a JSON array of strings. An empty input returns null,
+     * which clears the column so renderers omit the block entirely.
+     */
+    private String serializeTermsConditions(java.util.List<String> raw) {
+        java.util.List<String> terms = (raw == null)
+                ? java.util.List.of()
+                : raw.stream()
+                        .filter(line -> line != null)
+                        .map(String::trim)
+                        .filter(line -> !line.isEmpty())
+                        .limit(5)
+                        .toList();
+        if (terms.isEmpty()) {
+            return null;
+        }
+        // A "line" is meant to be a short footer bullet; without a cap a
+        // single 10 MB string would bloat the row and every PDF that later
+        // renders it. 200 characters is about two printed sentences.
+        for (String line : terms) {
+            if (line.length() > 200) {
+                throw new BadRequestException("Each terms & conditions line must be 200 characters or fewer");
+            }
+        }
+        try {
+            return objectMapper.writeValueAsString(terms);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Failed to serialise terms & conditions", e);
+        }
     }
 
     /**
@@ -250,12 +296,42 @@ public class BusinessServiceImpl implements BusinessService {
         // can reach every point of the sheet but never leaves it.
         double boxH = round ? sizeMm : sizeMm * STAMP_ASPECT_H;
 
+        String defaultColor = round ? DEFAULT_ROUND_COLOR : DEFAULT_STAMP_COLOR;
+        String incomingColor = incoming == null ? null : incoming.getColor();
+        String currentColor = current == null ? null : current.getColor();
+        String color = normalizeColor(incomingColor != null ? incomingColor : currentColor, defaultColor);
+
         return SealConfig.Variant.builder()
                 .sizeMm(sizeMm)
                 .tilt(roundTo2(clamp(tilt, -45, 45)))
                 .rightMm(roundTo2(clamp(right, 0, Math.max(0, PAGE_W_MM - sizeMm))))
                 .bottomMm(roundTo2(clamp(bottom, 0, Math.max(0, PAGE_H_MM - boxH))))
+                .color(color)
                 .build();
+    }
+
+    /**
+     * Canonicalises an ink colour to upper-case {@code #RRGGBB}. Accepts the
+     * short {@code #RGB} form too; anything that isn't a hex colour (an XSS
+     * payload, an empty string, a colour word) is dropped for the default so
+     * only a well-formed value ever reaches the SVG renderer.
+     */
+    private static String normalizeColor(String value, String fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String v = value.trim();
+        if (v.length() == 4 && v.charAt(0) == '#') {
+            // #RGB -> #RRGGBB
+            v = "#" + v.charAt(1) + v.charAt(1) + v.charAt(2) + v.charAt(2) + v.charAt(3) + v.charAt(3);
+        }
+        if (v.length() == 7 && v.charAt(0) == '#') {
+            String hex = v.substring(1);
+            if (hex.matches("(?i)[0-9a-f]{6}")) {
+                return v.toUpperCase();
+            }
+        }
+        return fallback;
     }
 
     private static double pick(Double primary, Double secondary, double fallback) {

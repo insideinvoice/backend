@@ -60,10 +60,12 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public JwtResponse signup(SignupRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        // Case-insensitive: "John" vs "john" and A@b.com vs a@b.com are the
+        // same identity — no two accounts may register with either.
+        if (userRepository.existsByEmailIgnoreCase(request.getEmail())) {
             throw new DuplicateResourceException("User", "email", request.getEmail());
         }
-        if (userRepository.existsByUsername(request.getUsername())) {
+        if (userRepository.existsByUsernameIgnoreCase(request.getUsername())) {
             throw new DuplicateResourceException("User", "username", request.getUsername());
         }
 
@@ -259,14 +261,35 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-        if (!user.getUsername().equals(request.getUsername()) && userRepository.existsByUsername(request.getUsername())) {
-            throw new DuplicateResourceException("User", "username", request.getUsername());
+        String newUsername = request.getUsername().trim();
+        // equalsIgnoreCase lets a user change only the casing of their OWN
+        // handle ("john" → "John") while still blocking anyone else's,
+        // whatever the casing.
+        if (!user.getUsername().equalsIgnoreCase(newUsername)
+                && userRepository.existsByUsernameIgnoreCase(newUsername)) {
+            throw new DuplicateResourceException("User", "username", newUsername);
         }
 
         user.setName(request.getName());
-        user.setUsername(request.getUsername());
+        user.setUsername(newUsername);
         userRepository.save(user);
         log.info("Profile updated for user: {}", user.getEmail());
+    }
+
+    @Override
+    public boolean isUsernameAvailable(String username) {
+        String candidate = username == null ? "" : username.trim();
+        if (candidate.isEmpty()) {
+            return false;
+        }
+        return !userRepository.existsByUsernameIgnoreCase(candidate);
+    }
+
+    @Override
+    public com.insideinvoice.auth.dto.response.UserProfileResponse getUserProfile(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        return userMapper.toProfileResponse(user);
     }
 
     @Override

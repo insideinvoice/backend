@@ -147,6 +147,13 @@ public class Business extends BaseEntity {
     private String sealConfig;
 
     /**
+     * Default Terms & Conditions as a JSON array of up to five strings (see
+     * V40), printed in the footer of every invoice. NULL = no default terms.
+     */
+    @Column(name = "terms_conditions", columnDefinition = "TEXT")
+    private String termsConditions;
+
+    /**
      * Configurable "Subject to ... Jurisdiction" footer. TRUE (DB default)
      * preserves the historical rendering, where the line was hardcoded and
      * always shown. FALSE removes the line from newly rendered documents; the
