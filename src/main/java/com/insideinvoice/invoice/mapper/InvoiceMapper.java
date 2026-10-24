@@ -64,6 +64,12 @@ public class InvoiceMapper {
      * or update request onto the invoice. Display/reference only — no totals.
      */
     public static void applyExtendedFields(Invoice invoice, InvoiceExtendedFields request) {
+        // GST Rule 46 compliance fields (cessPercentage must be set before
+        // calculateInvoiceTotals runs — both call sites honour that order).
+        invoice.setShippingAddress(request.getShippingAddress());
+        invoice.setReverseCharge(Boolean.TRUE.equals(request.getReverseCharge()));
+        invoice.setCessPercentage(request.getCessPercentage() != null ? request.getCessPercentage() : BigDecimal.ZERO);
+        invoice.setEwayBillNumber(request.getEwayBillNumber());
         invoice.setAgreementNumber(request.getAgreementNumber());
         invoice.setAssetNumber(request.getAssetNumber());
         invoice.setSerialNumber(request.getSerialNumber());
@@ -146,8 +152,17 @@ public class InvoiceMapper {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal grandTotal = taxableAmount.add(taxAmount).setScale(2, RoundingMode.HALF_UP);
+        // Compensation cess: invoice-level percentage on the discounted
+        // taxable value (same base as GST). Zero/null keeps legacy totals.
+        BigDecimal cessPct = invoice.getCessPercentage() != null
+                ? invoice.getCessPercentage().max(BigDecimal.ZERO).min(BigDecimal.valueOf(100))
+                : BigDecimal.ZERO;
+        BigDecimal cessAmount = taxableAmount.multiply(cessPct)
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
+        BigDecimal grandTotal = taxableAmount.add(taxAmount).add(cessAmount).setScale(2, RoundingMode.HALF_UP);
+
+        invoice.setCessAmount(cessAmount);
         invoice.setSubtotal(subtotal);
         invoice.setTaxAmount(taxAmount);
         invoice.setGrandTotal(grandTotal);
@@ -207,6 +222,11 @@ public class InvoiceMapper {
                 .termsOfDelivery(invoice.getTermsOfDelivery())
                 .otherReferences(invoice.getOtherReferences())
                 .destination(invoice.getDestination())
+                .shippingAddress(invoice.getShippingAddress())
+                .reverseCharge(invoice.getReverseCharge())
+                .cessPercentage(invoice.getCessPercentage())
+                .cessAmount(invoice.getCessAmount())
+                .ewayBillNumber(invoice.getEwayBillNumber())
                 .agreementNumber(invoice.getAgreementNumber())
                 .assetNumber(invoice.getAssetNumber())
                 .serialNumber(invoice.getSerialNumber())

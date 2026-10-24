@@ -1,6 +1,7 @@
 package com.insideinvoice.invoice.dto.request;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 
 /**
  * The V29 industry-extended optional fields shared by the create and update
@@ -13,6 +14,15 @@ import java.time.LocalDate;
  * never participate in totals or tax calculations.</p>
  */
 public interface InvoiceExtendedFields {
+
+    /* GST Rule 46 compliance fields — shared by create and update. */
+    String getShippingAddress();
+
+    Boolean getReverseCharge();
+
+    BigDecimal getCessPercentage();
+
+    String getEwayBillNumber();
 
     String getAgreementNumber();
 

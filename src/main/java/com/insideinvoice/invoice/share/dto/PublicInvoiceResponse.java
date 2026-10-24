@@ -99,6 +99,8 @@ public class PublicInvoiceResponse {
         private String businessName;
         private String gstIn;
         private String phone;
+        /** Optional second business phone; null = none. */
+        private String additionalPhone;
         private String email;
         private String website;
         private String addressLine1;

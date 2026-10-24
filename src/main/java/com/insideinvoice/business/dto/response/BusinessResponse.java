@@ -20,6 +20,8 @@ public class BusinessResponse {
     private String ownerName;
     private String gstIn;
     private String phone;
+    /** Optional second phone number; null = not provided. */
+    private String additionalPhone;
     private String email;
     private String website;
     private String addressLine1;

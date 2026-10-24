@@ -35,6 +35,10 @@ public class Business extends BaseEntity {
     @Column(name = "phone")
     private String phone;
 
+    /** Optional second phone number (e.g. a landline next to the mobile). */
+    @Column(name = "additional_phone", length = 20)
+    private String additionalPhone;
+
     @Column(name = "email")
     private String email;
 
