@@ -16,6 +16,7 @@ public class BusinessMapper {
                 .businessName(request.getBusinessName())
                 .gstIn(request.getGstIn())
                 .phone(request.getPhone())
+                .additionalPhone(request.getAdditionalPhone())
                 .email(request.getEmail())
                 .website(request.getWebsite())
                 .addressLine1(request.getAddressLine1())
@@ -47,6 +48,7 @@ public class BusinessMapper {
                 .ownerName(business.getOwnerName())
                 .gstIn(business.getGstIn())
                 .phone(business.getPhone())
+                .additionalPhone(business.getAdditionalPhone())
                 .email(business.getEmail())
                 .website(business.getWebsite())
                 .addressLine1(business.getAddressLine1())
@@ -91,6 +93,7 @@ public class BusinessMapper {
         if (request.getBusinessName() != null) business.setBusinessName(request.getBusinessName());
         if (request.getGstIn() != null) business.setGstIn(request.getGstIn());
         if (request.getPhone() != null) business.setPhone(request.getPhone());
+        if (request.getAdditionalPhone() != null) business.setAdditionalPhone(request.getAdditionalPhone());
         if (request.getEmail() != null) business.setEmail(request.getEmail());
         if (request.getWebsite() != null) business.setWebsite(request.getWebsite());
         if (request.getAddressLine1() != null) business.setAddressLine1(request.getAddressLine1());

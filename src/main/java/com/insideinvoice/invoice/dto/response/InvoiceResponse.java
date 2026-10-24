@@ -36,6 +36,11 @@ public class InvoiceResponse {
     private BigDecimal taxAmount;
     private BigDecimal grandTotal;
     private BigDecimal discountPercent;
+    private String shippingAddress;
+    private Boolean reverseCharge;
+    private BigDecimal cessPercentage;
+    private BigDecimal cessAmount;
+    private String ewayBillNumber;
     private String paymentTerms;
     private String notes;
     private String status;

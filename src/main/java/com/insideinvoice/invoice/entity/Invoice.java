@@ -109,6 +109,26 @@ public class Invoice extends BaseEntity {
     @Column(name = "destination")
     private String destination;
 
+    /* ---- GST Rule 46 compliance fields ----
+     * Ship-To (separate from the billing address when delivery differs),
+     * reverse-charge declaration, invoice-level compensation cess and the
+     * e-way bill reference. All optional; cess feeds the totals engine. */
+    @Column(name = "shipping_address")
+    private String shippingAddress;
+
+    @Column(name = "reverse_charge", nullable = false)
+    @Builder.Default
+    private Boolean reverseCharge = false;
+
+    @Column(name = "cess_percentage")
+    private BigDecimal cessPercentage;
+
+    @Column(name = "cess_amount")
+    private BigDecimal cessAmount;
+
+    @Column(name = "eway_bill_number")
+    private String ewayBillNumber;
+
     /* ---- V29: industry-extended optional fields (Rental & Healthcare) ----
      * Nullable, display/reference only — never part of totals or tax math.
      * Only the owning industry's form exposes them; every other industry and

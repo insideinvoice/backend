@@ -25,6 +25,9 @@ public class BusinessUpdateRequest {
     @Size(max = 20, message = "Phone must not exceed 20 characters")
     private String phone;
 
+    @Size(max = 20, message = "Additional phone must not exceed 20 characters")
+    private String additionalPhone;
+
     private String email;
 
     private String website;

@@ -13,6 +13,7 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.math.BigDecimal;
 
 @Getter
 @Setter
@@ -32,7 +33,7 @@ public class UpdateInvoiceRequest implements InvoiceExtendedFields {
     @NotNull(message = "Invoice date is required")
     private LocalDate invoiceDate;
 
-    @NotNull(message = "Due date is required")
+    // Due date is a commercial field, not a Rule 46 statutory one — optional.
     private LocalDate dueDate;
 
     private String placeOfSupply;
@@ -62,6 +63,12 @@ public class UpdateInvoiceRequest implements InvoiceExtendedFields {
     private String otherReferences;
 
     private String destination;
+
+    // GST Rule 46 compliance fields
+    private String shippingAddress;
+    private Boolean reverseCharge = false;
+    private BigDecimal cessPercentage;
+    private String ewayBillNumber;
 
     private String paymentMode;
 

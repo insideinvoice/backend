@@ -133,6 +133,7 @@ public class PublicInvoiceAssembler {
                 .businessName(b.getBusinessName())
                 .gstIn(b.getGstIn())
                 .phone(b.getPhone())
+                .additionalPhone(b.getAdditionalPhone())
                 .email(b.getEmail())
                 .website(b.getWebsite())
                 .addressLine1(b.getAddressLine1())
