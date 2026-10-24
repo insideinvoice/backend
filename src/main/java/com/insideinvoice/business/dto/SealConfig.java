@@ -24,8 +24,9 @@ import lombok.Setter;
 public class SealConfig {
 
     /**
-     * Whether the seal is stamped on every page (true) or only the first page
-     * (false). Null means "keep the current value / built-in default (true)".
+     * Whether the seal is stamped on every page (true) or only the final page
+     * — the one carrying the grand total and the signature band (false).
+     * Null means "keep the current value / built-in default (false)".
      */
     private Boolean allPages;
 
@@ -42,5 +43,11 @@ public class SealConfig {
         private Double tilt;
         private Double rightMm;
         private Double bottomMm;
+
+        /**
+         * Ink colour as a #RRGGBB hex string. Null means "keep the current
+         * value / built-in default" so older payloads stay compatible.
+         */
+        private String color;
     }
 }

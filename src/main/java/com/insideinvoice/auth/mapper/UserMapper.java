@@ -1,6 +1,7 @@
 package com.insideinvoice.auth.mapper;
 
 import com.insideinvoice.auth.dto.response.JwtResponse;
+import com.insideinvoice.auth.dto.response.UserProfileResponse;
 import com.insideinvoice.auth.entity.User;
 import org.springframework.stereotype.Component;
 
@@ -11,6 +12,18 @@ public class UserMapper {
         return JwtResponse.builder()
                 .accessToken(accessToken)
                 .tokenType("Bearer")
+                .userId(user.getId())
+                .name(user.getName())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .role(user.getRole().name())
+                .businessId(user.getBusinessId())
+                .businessSetupCompleted(user.isBusinessSetupCompleted())
+                .build();
+    }
+
+    public UserProfileResponse toProfileResponse(User user) {
+        return UserProfileResponse.builder()
                 .userId(user.getId())
                 .name(user.getName())
                 .username(user.getUsername())

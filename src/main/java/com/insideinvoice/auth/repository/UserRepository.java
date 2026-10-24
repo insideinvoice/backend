@@ -47,6 +47,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByUsername(String username);
 
+    /**
+     * Case-insensitive probes backing Instagram-style uniqueness: "John" and
+     * "john" are the same handle, A@b.com and a@b.com the same account. The
+     * lower() unique indexes from V39 enforce the same rule at the DB level.
+     */
+    boolean existsByEmailIgnoreCase(String email);
+
+    boolean existsByUsernameIgnoreCase(String username);
+
     List<User> findTop10ByOrderByCreatedAtDesc();
 
     /** Monthly platform signup counts since cutoff (row 0 = month timestamp). Admin new-users chart. */

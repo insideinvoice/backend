@@ -60,6 +60,12 @@ public class BusinessResponse {
      */
     private String sealConfig;
 
+    /**
+     * Default Terms & Conditions lines (JSON array of up to five strings),
+     * or null when the business has none yet.
+     */
+    private String termsConditions;
+
     /** Whether the "SUBJECT TO {CITY} JURISDICTION" footer line is rendered. */
     private Boolean jurisdictionEnabled;
 

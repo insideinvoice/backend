@@ -76,6 +76,7 @@ public class BusinessMapper {
                         ? "round"
                         : business.getSealType())
                 .sealConfig(business.getSealConfig())
+                .termsConditions(business.getTermsConditions())
                 .industryConfig(IndustryConfigResponse.from(
                         IndustryRegistry.forRawIndustry(business.getIndustry())))
                 .createdAt(business.getCreatedAt())

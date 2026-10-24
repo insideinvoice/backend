@@ -21,10 +21,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -98,6 +100,23 @@ public class AuthController {
         httpResponse.addCookie(jwtCookie);
 
         return ResponseEntity.ok(ApiResponse.success("Logged out successfully"));
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "Current user's profile (fresh — keeps the client snapshot current)")
+    public ResponseEntity<ApiResponse<com.insideinvoice.auth.dto.response.UserProfileResponse>> me() {
+        UserPrincipal principal = currentPrincipal();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Profile fetched", authService.getUserProfile(principal.getId())));
+    }
+
+    @GetMapping("/username-available")
+    @Operation(summary = "Check whether a username is free (case-insensitive)")
+    public ResponseEntity<ApiResponse<Boolean>> usernameAvailable(
+            @RequestParam("username") String username) {
+        boolean available = authService.isUsernameAvailable(username);
+        return ResponseEntity.ok(ApiResponse.success(
+                available ? "Username is available" : "Username is already taken", available));
     }
 
     @PutMapping("/profile")
