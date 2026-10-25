@@ -83,7 +83,9 @@ public class EInvoiceConfigService {
         Map<String, String> effectiveCredentials = new LinkedHashMap<>(credentialService.decrypt(previousCredentials));
         effectiveCredentials.putAll(incomingCredentials);
 
-        if (enabling && effectiveCredentials.isEmpty()) {
+        // Real providers need stored credentials before automation can be
+        // trusted; the Mock provider needs none — it never talks to an IRP.
+        if (enabling && provider != EInvoiceProviderId.MOCK && effectiveCredentials.isEmpty()) {
             throw new BadRequestException("Store the provider API credentials before enabling e-invoicing");
         }
 

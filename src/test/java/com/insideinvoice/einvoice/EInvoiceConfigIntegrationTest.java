@@ -102,6 +102,22 @@ class EInvoiceConfigIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("MOCK provider enables with NO credentials — it never talks to an IRP")
+    void mockEnablesWithoutCredentials() throws Exception {
+        User owner = makeUser("einv-mocknocred-" + runId(), Role.USER);
+        Business business = businessRepository.findById(owner.getBusinessId()).orElseThrow();
+        business.setGstIn("29ABCDE1234F1Z5");
+        businessRepository.save(business);
+
+        mockMvc.perform(put("/api/einvoice/config").header("Authorization", bearerFor(owner))
+                        .contentType("application/json")
+                        .content(configBody("", "MOCK", "SANDBOX", true, "", "")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(true))
+                .andExpect(jsonPath("$.data.hasCredentials").value(false));
+    }
+
+    @Test
     @DisplayName("Invalid GSTIN is rejected")
     void invalidGstinRejected() throws Exception {
         User owner = makeUser("einv-gstin-" + runId(), Role.USER);
