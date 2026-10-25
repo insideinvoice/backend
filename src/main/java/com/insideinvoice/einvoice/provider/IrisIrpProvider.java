@@ -56,7 +56,7 @@ public class IrisIrpProvider implements EInvoiceProvider {
             .build();
 
     /** Operator gate: real government calls happen only when explicitly enabled. */
-    @Value("${app.einvoice.live-calls:false}")
+    @Value("${app.einvoice.live-calls:true}")
     private boolean liveCalls;
 
     @Override
