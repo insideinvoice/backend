@@ -81,6 +81,12 @@ public class EInvoiceCredentialService {
         }
     }
 
+    /** True when the stored envelope contains a non-blank value for the field. */
+    public boolean hasField(String envelope, String field) {
+        Object v = decrypt(envelope).get(field);
+        return v != null && !String.valueOf(v).isBlank();
+    }
+
     /** Decrypts the stored envelope back to a credentials map (never logged). */
     public Map<String, String> decrypt(String envelope) {
         if (envelope == null || envelope.isBlank()) return Map.of();

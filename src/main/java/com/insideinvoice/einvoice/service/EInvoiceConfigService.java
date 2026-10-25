@@ -45,7 +45,7 @@ public class EInvoiceConfigService {
 
     @Transactional(readOnly = true)
     public EInvoiceConfigResponse getConfig(Long businessId) {
-        return EInvoiceConfigResponse.from(
+        return decorate(
                 configRepository.findFirstByBusinessIdOrderByUpdatedAtDesc(businessId).orElse(null));
     }
 
@@ -68,6 +68,14 @@ public class EInvoiceConfigService {
             incomingCredentials.put("clientId", request.getClientId().trim());
         if (request.getClientSecret() != null && !request.getClientSecret().isBlank())
             incomingCredentials.put("clientSecret", request.getClientSecret().trim());
+        if (request.getApiUsername() != null && !request.getApiUsername().isBlank())
+            incomingCredentials.put("apiUsername", request.getApiUsername().trim());
+        if (request.getApiPassword() != null && !request.getApiPassword().isBlank())
+            incomingCredentials.put("apiPassword", request.getApiPassword().trim());
+        if (request.getAppKey() != null && !request.getAppKey().isBlank())
+            incomingCredentials.put("appKey", request.getAppKey().trim());
+        if (request.getBaseUrl() != null && !request.getBaseUrl().isBlank())
+            incomingCredentials.put("baseUrl", request.getBaseUrl().trim());
 
         EInvoiceConfig config = configRepository
                 .findByBusinessIdAndGstinAndEnvironment(businessId, gstin, environment)
@@ -101,7 +109,19 @@ public class EInvoiceConfigService {
         audit(businessId, userId, saved.getId(), "CONFIG_SAVED",
                 "enabled=" + enabling + ", provider=" + provider + ", env=" + environment,
                 enabling ? "ENABLED" : "DISABLED");
-        return EInvoiceConfigResponse.from(saved);
+        return decorate(saved);
+    }
+
+    /** Fills the hasX booleans from the decrypted envelope — values never leave. */
+    private EInvoiceConfigResponse decorate(EInvoiceConfig config) {
+        if (config == null) return null;
+        EInvoiceConfigResponse resp = EInvoiceConfigResponse.from(config);
+        String envelope = config.getCredentialsEncrypted();
+        resp.setHasPortalCredentials(
+                credentialService.hasField(envelope, "apiUsername")
+                        && credentialService.hasField(envelope, "apiPassword"));
+        resp.setHasAppKey(credentialService.hasField(envelope, "appKey"));
+        return resp;
     }
 
     @Transactional

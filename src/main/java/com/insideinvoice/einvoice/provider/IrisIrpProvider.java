@@ -23,11 +23,29 @@ public class IrisIrpProvider implements EInvoiceProvider {
 
     @Override
     public ConnectionTestResult testConnection(EInvoiceEnvironment environment, Map<String, String> credentials) {
+        // The full NIC/IRIS auth flow needs all three pieces; report precisely
+        // what is missing instead of a generic failure. Nothing is sent yet.
+        boolean hasClient = credentials.containsKey("clientId") && credentials.containsKey("clientSecret");
+        boolean hasPortal = credentials.containsKey("apiUsername") && credentials.containsKey("apiPassword");
+        boolean hasAppKey = credentials.containsKey("appKey");
+        if (!(hasClient && hasPortal && hasAppKey)) {
+            java.util.List<String> missing = new java.util.ArrayList<>();
+            if (!hasClient) missing.add("client ID + secret");
+            if (!hasPortal) missing.add("portal username + password");
+            if (!hasAppKey) missing.add("app key");
+            return new ConnectionTestResult(
+                    ConnectionTestResult.PROVIDER_UNAVAILABLE,
+                    "Configuration incomplete for " + environment.name() + ": missing "
+                            + String.join(", ", missing)
+                            + ". Everything is configured from Settings; nothing was sent to the IRP.",
+                    false);
+        }
         return new ConnectionTestResult(
                 ConnectionTestResult.PROVIDER_UNAVAILABLE,
-                "IRIS IRP API integration is not activated on this deployment yet. Credentials are stored "
-                        + "securely and will be used once the integration is switched on — nothing was sent "
-                        + "to the IRP.",
+                "Configuration complete (client, portal credentials, app key"
+                        + (credentials.containsKey("baseUrl") ? ", endpoint override" : "")
+                        + "). IRIS IRP API submission is not activated on this deployment yet — nothing was "
+                        + "sent to the IRP; the endpoint wiring lands with the integration phase.",
                 false);
     }
 

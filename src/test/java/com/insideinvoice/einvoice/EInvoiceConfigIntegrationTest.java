@@ -120,6 +120,50 @@ class EInvoiceConfigIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("Full government credential set persists: portal user/pass + app key flagged, values never echoed")
+    void fullCredentialSetPersistsSecurely() throws Exception {
+        User owner = makeUser("einv-full-" + runId(), Role.USER);
+        Business business = businessRepository.findById(owner.getBusinessId()).orElseThrow();
+        business.setGstIn("29ABCDE1234F1Z5");
+        businessRepository.save(business);
+
+        String body = "{"
+                + "\"gstin\":\"\","
+                + "\"provider\":\"IRIS_IRP\","
+                + "\"environment\":\"SANDBOX\","
+                + "\"enabled\":true,"
+                + "\"clientId\":\"cid-9\","
+                + "\"clientSecret\":\"sec-9\","
+                + "\"apiUsername\":\"portal-user\","
+                + "\"apiPassword\":\"portal-pass\","
+                + "\"appKey\":\"appkey-32-chars-long-xxxxxxxxxxxx\","
+                + "\"baseUrl\":\"https://irspondemand.dev\""
+                + "}";
+
+        org.springframework.test.web.servlet.MvcResult result = mockMvc
+                .perform(put("/api/einvoice/config").header("Authorization", bearerFor(owner))
+                        .contentType("application/json").content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.hasCredentials").value(true))
+                .andExpect(jsonPath("$.data.hasPortalCredentials").value(true))
+                .andExpect(jsonPath("$.data.hasAppKey").value(true))
+                .andReturn();
+
+        String response = result.getResponse().getContentAsString();
+        for (String secret : new String[]{"portal-user", "portal-pass", "appkey-32-chars", "cid-9", "sec-9", "irspondemand"}) {
+            org.junit.jupiter.api.Assertions.assertFalse(response.contains(secret),
+                    "the response must never contain the secret value: " + secret);
+        }
+
+        // IRIS + complete config: the connection test reports the precise,
+        // honest next step instead of a generic failure.
+        mockMvc.perform(post("/api/einvoice/config/test").header("Authorization", bearerFor(owner)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.message").value(
+                        org.hamcrest.Matchers.containsString("not activated")));
+    }
+
+    @Test
     @DisplayName("Invalid GSTIN is rejected")
     void invalidGstinRejected() throws Exception {
         User owner = makeUser("einv-gstin-" + runId(), Role.USER);

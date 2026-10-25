@@ -6,6 +6,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+
 /**
  * Safe projection of the stored configuration — credentials are represented
  * ONLY by a hasCredentials boolean; ciphertext and secrets never leave the
@@ -22,6 +23,10 @@ public class EInvoiceConfigResponse {
     private Boolean enabled;
     private Boolean autoRegister;
     private boolean hasCredentials;
+    /** E-invoice portal username/password stored (IRP auth flow requirement). */
+    private boolean hasPortalCredentials;
+    /** App key stored (decrypts the IRP session encryption key). */
+    private boolean hasAppKey;
     private String connectionStatus;
     private LocalDateTime lastConnectionTestAt;
     private String lastConnectionError;
