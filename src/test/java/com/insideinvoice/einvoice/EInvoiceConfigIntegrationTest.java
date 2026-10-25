@@ -76,19 +76,21 @@ class EInvoiceConfigIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("Enabling without credentials is rejected — no half-configured automation")
-    void enableWithoutCredentialsRejected() throws Exception {
+    @DisplayName("Enabling NEVER requires credentials — registration is what refuses, honestly")
+    void enableWithoutCredentialsAllowed() throws Exception {
         User owner = makeUser("einv-nocred-" + runId(), Role.USER);
         Business business = businessRepository.findById(owner.getBusinessId()).orElseThrow();
         business.setGstIn("29ABCDE1234F1Z5");
         businessRepository.save(business);
 
+        // The feature is opt-in: the toggle turns on freely, with or without
+        // credentials, for every provider.
         mockMvc.perform(put("/api/einvoice/config").header("Authorization", bearerFor(owner))
                         .contentType("application/json")
                         .content(configBody("", "IRIS_IRP", "SANDBOX", true, "", "")))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(
-                        org.hamcrest.Matchers.containsString("before enabling")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(true))
+                .andExpect(jsonPath("$.data.hasCredentials").value(false));
     }
 
     @Test

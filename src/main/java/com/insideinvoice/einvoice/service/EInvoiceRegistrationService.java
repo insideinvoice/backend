@@ -4,6 +4,7 @@ import com.insideinvoice.einvoice.dto.EInvoiceStatusResponse;
 import com.insideinvoice.einvoice.entity.EInvoiceConfig;
 import com.insideinvoice.einvoice.entity.EInvoiceRegistration;
 import com.insideinvoice.einvoice.entity.EInvoiceRegistrationRequest;
+import com.insideinvoice.einvoice.entity.EInvoiceProviderId;
 import com.insideinvoice.einvoice.entity.EInvoiceStatus;
 import com.insideinvoice.einvoice.entity.RegistrationRequestState;
 import com.insideinvoice.einvoice.provider.EInvoiceProviderRegistry;
@@ -128,6 +129,18 @@ public class EInvoiceRegistrationService {
         String buyerName = invoice.getCustomerId() != null
                 ? customerRepository.findById(invoice.getCustomerId()).map(c -> c.getName()).orElse(null)
                 : null;
+        // Real providers need credentials for an actual submission; the Mock
+        // provider never talks to an IRP. Refusing HERE (not at the toggle)
+        // keeps enabling free while nothing is ever half-submitted.
+        if (config.getProvider() != EInvoiceProviderId.MOCK) {
+            Map<String, String> creds = credentialService.decrypt(config.getCredentialsEncrypted());
+            if (creds.isEmpty()) {
+                audit(businessId, userId, invoiceId, "IRN_BLOCKED", "no credentials stored", "FAILED");
+                throw new BadRequestException(
+                        "Add the provider API credentials in Settings before registering — nothing was sent to the government portal");
+            }
+        }
+
         Map<String, Object> payload = payloadMapper.buildPayload(invoice, config.getGstin(), buyerGstin, buyerName);
         String payloadHash = sha256(payload.toString());
         String idempotencyKey = sha256(businessId + ":" + invoiceId + ":" + payloadHash);
