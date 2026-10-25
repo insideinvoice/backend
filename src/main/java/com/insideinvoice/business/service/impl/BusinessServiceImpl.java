@@ -256,6 +256,11 @@ public class BusinessServiceImpl implements BusinessService {
                 // one carrying the grand total + signature). Owners opt into
                 // repeating the mark on every continuation page.
                 .allPages(pickBoolean(incoming.getAllPages(), base.getAllPages(), false))
+                // Signature size rides the same config: null = keep the stored
+                // value (the built-in default is 78px).
+                .signatureSize(incoming.getSignatureSize() != null
+                        ? Math.max(48, Math.min(120, incoming.getSignatureSize()))
+                        : base.getSignatureSize())
                 .round(mergeVariant(base.getRound(), incoming.getRound(), true))
                 .stamp(mergeVariant(base.getStamp(), incoming.getStamp(), false))
                 .build();
