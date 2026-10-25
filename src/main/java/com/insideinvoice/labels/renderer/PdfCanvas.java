@@ -396,55 +396,63 @@ public final class PdfCanvas implements AutoCloseable {
             left = xMm - widthMm;
         }
         double baselineTop = LabelUnits.snapMm(cellY + yTopMm, dpi) - cellY;
-        drawRuns(value, left, baselineTop, sizePt, bold, 0);
+        drawRuns(value, left, baselineTop, sizePt, bold);
     }
 
-    private void drawRuns(String value, double leftTopMm, double yTopMm, double sizePt, boolean bold,
-                          double rotationRad) throws IOException {
+    private void drawRuns(String value, double leftTopMm, double yTopMm, double sizePt, boolean bold)
+            throws IOException {
         double cursorMm = 0;
         for (FontBundle.Run run : fonts.segment(value, bold)) {
             double runWmm = LabelUnits.ptToMm(run.font().getStringWidth(run.text()) / 1000.0 * sizePt);
             double ascentMm = capAscentMm(run.font(), sizePt);
             double x = leftTopMm + cursorMm;
-            float baselineX;
-            float baselineY;
-            if (rotationRad == 0) {
-                baselineX = px(x);
-                baselineY = py(yTopMm + ascentMm);
-            } else {
-                baselineX = px(x);
-                baselineY = py(yTopMm + ascentMm);
-            }
             cs.beginText();
             cs.setFont(run.font(), (float) sizePt);
-            if (rotationRad == 0) {
-                cs.setTextMatrix(Matrix.getTranslateInstance(baselineX, baselineY));
-            } else {
-                // rotate around the point, then advance along the baseline
-                float originX = px(leftTopMm);
-                float originY = py(yTopMm);
-                Matrix m = Matrix.getRotateInstance(rotationRad, originX, originY);
-                float advancePt = (float) LabelUnits.mmToPt(cursorMm);
-                m.concatenate(Matrix.getTranslateInstance(advancePt, 0));
-                cs.setTextMatrix(m);
-            }
+            cs.setTextMatrix(Matrix.getTranslateInstance(px(x), py(yTopMm + ascentMm)));
             cs.showText(run.text());
             cs.endText();
             cursorMm += runWmm;
         }
     }
 
-    /** Draws text rotated around its centre point (used for vertical SHIP TO captions). */
+    /**
+     * Draws text rotated around its centre point (used for the vertical SHIP TO /
+     * RETURN TO captions). The rotation is baked into the text matrix, and the
+     * translate part is chosen so the glyph box — width x cap height — lands centred
+     * exactly on {@code cxMm}/{@code cyMm}: the caption no longer drifts off the
+     * label edge or into the address column at ±90°.
+     */
     public void rotatedText(String value, double cxMm, double cyMm, double angleDeg, double sizePt, boolean bold)
             throws IOException {
         ensureOpen();
         if (value == null || value.isEmpty()) {
             return;
         }
-        double widthMm = textWidthMm(value, sizePt, bold);
-        double left = cxMm - widthMm / 2;
-        double top = cyMm - LabelUnits.ptToMm(sizePt * CAP_FALLBACK) / 2;
-        drawRuns(value, left, top, sizePt, bold, Math.toRadians(angleDeg));
+        double a = Math.toRadians(angleDeg);
+        double cos = Math.cos(a);
+        double sin = Math.sin(a);
+        // Centre of the un-rotated glyph box in baseline-local points: the baseline sits
+        // at y = 0 and the caps reach up to capPt, so the box spans [0, width] x [0, cap].
+        double midX = textWidthPt(value, sizePt, bold) / 2.0;
+        double midY = sizePt * CAP_FALLBACK / 2.0;
+        // Anchor = target point minus the rotated half-box, so the rotated box centre
+        // falls precisely on the requested point.
+        double ox = px(cxMm) - (midX * cos - midY * sin);
+        double oy = py(cyMm) - (midX * sin + midY * cos);
+
+        cs.setNonStrokingColor(textColor);
+        double cursorPt = 0;
+        for (FontBundle.Run run : fonts.segment(value, bold)) {
+            cs.beginText();
+            cs.setFont(run.font(), (float) sizePt);
+            // Row-vector matrix: (x, y) -> (x·cos - y·sin + e, x·sin + y·cos + f); each run
+            // starts at its cursor offset along the rotated baseline.
+            cs.setTextMatrix(new Matrix((float) cos, (float) sin, (float) -sin, (float) cos,
+                    (float) (ox + cursorPt * cos), (float) (oy + cursorPt * sin)));
+            cs.showText(run.text());
+            cs.endText();
+            cursorPt += run.font().getStringWidth(run.text()) / 1000.0 * sizePt;
+        }
     }
 
     /** Width of a single-line string in mm (for chip/box sizing). */

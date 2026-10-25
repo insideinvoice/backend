@@ -105,7 +105,9 @@ public abstract class BaseIntegrationTest {
                 .businessId(businessId)
                 .name("Test Customer " + UUID.randomUUID().toString().substring(0, 8))
                 .email("cust-" + UUID.randomUUID().toString().substring(0, 8) + "@test.local")
-                .phone("9999999999")
+                // Unique per seed: uq_customers_business_id_phone (V44) rejects a
+                // second row with the same phone INSIDE one business.
+                .phone(uniquePhone())
                 .billingAddress("1 Test Street")
                 .gstIn("29ABCDE1234F1Z5")
                 .city("Bengaluru")
@@ -113,6 +115,11 @@ public abstract class BaseIntegrationTest {
                 .country("India")
                 .pincode("560001")
                 .build());
+    }
+
+    /** 10-digit phone, distinct per seed so two seeds in one business never clash. */
+    private static String uniquePhone() {
+        return "9" + String.format("%09d", Math.floorMod(UUID.randomUUID().hashCode(), 1_000_000_000));
     }
 
     protected Invoice seedInvoice(User owner) {

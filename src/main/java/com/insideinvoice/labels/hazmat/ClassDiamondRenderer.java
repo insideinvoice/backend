@@ -21,8 +21,9 @@ import java.util.Locale;
  */
 public class ClassDiamondRenderer implements HazmatRenderer {
 
+    /** ISO-8601 date + 24 h time, matching the shipping-label footer style. */
     static final DateTimeFormatter TS_FMT =
-            DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm", Locale.ENGLISH);
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.ENGLISH);
 
     @Override
     public byte[] render(HazmatSpec spec) throws Exception {
@@ -90,7 +91,10 @@ public class ClassDiamondRenderer implements HazmatRenderer {
         if (!name.isEmpty()) {
             int nameBg = lowerColor(hc, thermal);
             int[] nameInk = pick(nameBg, hc, thermal, spec, false);
-            c.fillRgb(nameInk[0], nameInk[1], nameInk[2]);
+            // Text colour, NOT fill: glyphs print with textColor, so the picked
+            // contrast ink has to be applied there or the class name comes out
+            // black on a dark (red/blue/orange) lower half.
+            c.textColorRgb(nameInk[0], nameInk[1], nameInk[2]);
             double avail = S * 0.74;
             double y = cy + 0.055 * S;
             if (name.length() > 42) {
@@ -102,6 +106,7 @@ public class ClassDiamondRenderer implements HazmatRenderer {
                 double size = c.fitFontSize(name, avail, 0.05 * S, Math.min(6, 0.05 * S), true);
                 c.text(name, cx, y, size, true, PdfCanvas.Align.CENTER);
             }
+            c.textColorBlack();
             c.fillBlack();
         }
 
@@ -115,7 +120,7 @@ public class ClassDiamondRenderer implements HazmatRenderer {
             int lowerBg = lowerColor(hc, thermal);
             int[] numInk = pick(lowerBg, hc, thermal, spec, false);
             double topY = cy + 0.215 * S - LabelUnits.ptToMm(fit * 0.72) / 2;
-            c.fillRgb(numInk[0], numInk[1], numInk[2]);
+            c.textColorRgb(numInk[0], numInk[1], numInk[2]);
             c.text(numeral, cx, topY, fit, true, PdfCanvas.Align.CENTER);
             double underY = topY + LabelUnits.ptToMm(fit * 0.82);
             if (numeral.equals("9") || numeral.startsWith("9")) { // class 9 underlined
@@ -124,13 +129,14 @@ public class ClassDiamondRenderer implements HazmatRenderer {
                 c.fillRect(cx - w / 2, underY, w, Math.max(0.01 * S, 0.5));
             }
             c.fillBlack();
-            // subsidiary risks under the numeral
+            // subsidiary risks under the numeral (same contrast ink as the numeral)
             List<String> subs = spec.subsidiaryList();
             if (!subs.isEmpty() && S >= 90) {
                 String sub = "SUB: " + String.join(" / ", subs);
                 double ss = c.fitFontSize(sub, S * 0.4, 7, 6, false);
                 c.text(sub, cx, underY + 1.2, ss, false, PdfCanvas.Align.CENTER);
             }
+            c.textColorBlack();
         }
 
         // 6) radioactive category boxes (right side of the upper half)
@@ -395,10 +401,13 @@ public class ClassDiamondRenderer implements HazmatRenderer {
             c.strokeRect(x, y, box, box, Math.max(0.01 * S, 0.5));
             double fs = LabelUnits.mmToPt(box * 0.6) / 0.72;
             if (on) {
-                c.fillWhite();
+                // Black-filled box: the numeral must switch to white text —
+                // fillWhite()/fillBlack() only move the shape fill, glyphs
+                // always print with textColor.
+                c.textColorWhite();
                 c.text(cats[i], x + box / 2, y + box * 0.18, Math.max(6, fs), true,
                         PdfCanvas.Align.CENTER);
-                c.fillBlack();
+                c.textColorBlack();
             } else {
                 c.text(cats[i], x + box / 2, y + box * 0.18, Math.max(6, fs), true,
                         PdfCanvas.Align.CENTER);

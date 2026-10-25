@@ -33,6 +33,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductResponse createProduct(CreateProductRequest request, Long businessId) {
+        assertNameUnique(request.getName(), businessId, null);
         assertHsnUnique(request.getHsn(), businessId, null);
         Product product = productMapper.toEntity(request, businessId);
         product = productRepository.save(product);
@@ -74,6 +75,9 @@ public class ProductServiceImpl implements ProductService {
         Product product = productRepository.findByIdAndBusinessId(id, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id));
 
+        if (request.getName() != null) {
+            assertNameUnique(request.getName(), businessId, id);
+        }
         if (request.getHsn() != null) {
             assertHsnUnique(request.getHsn(), businessId, id);
         }
@@ -104,8 +108,50 @@ public class ProductServiceImpl implements ProductService {
         return productMapper.toResponse(products.get(0));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ProductResponse findByName(String name, Long businessId) {
+        String normalized = normalizeName(name);
+        if (normalized.isEmpty()) {
+            throw new ResourceNotFoundException("Product", "name", name);
+        }
+        List<Product> products = productRepository.findByBusinessId(businessId).stream()
+                .filter(p -> normalizeName(p.getName()).equals(normalized))
+                .toList();
+        if (products.isEmpty()) {
+            throw new ResourceNotFoundException("Product", "name", name);
+        }
+        return productMapper.toResponse(products.get(0));
+    }
+
     private static String normalizeHsn(String hsn) {
         return hsn.replaceAll("[^0-9A-Za-z]", "").toUpperCase();
+    }
+
+    /** Product names match ignoring leading/trailing space, inner whitespace runs and case. */
+    private static String normalizeName(String name) {
+        return name == null ? "" : name.trim().replaceAll("\\s+", " ").toLowerCase();
+    }
+
+    /**
+     * Product names must be unique per business so the same catalogue entry
+     * cannot be added twice. Matching ignores surrounding/duplicate whitespace
+     * and case so "Steel Table", "steel  table " and "STEEL TABLE" collide.
+     */
+    private void assertNameUnique(String name, Long businessId, Long excludeProductId) {
+        String trimmed = name == null ? "" : name.trim();
+        String normalized = normalizeName(trimmed);
+        if (normalized.isEmpty()) {
+            return;
+        }
+        productRepository.findByBusinessId(businessId).stream()
+                .filter(p -> excludeProductId == null || !excludeProductId.equals(p.getId()))
+                .filter(p -> normalizeName(p.getName()).equals(normalized))
+                .findFirst()
+                .ifPresent(existing -> {
+                    throw new DuplicateResourceException(String.format(
+                            "Product name '%s' already exists in your catalogue", existing.getName()));
+                });
     }
 
     /**

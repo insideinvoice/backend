@@ -128,6 +128,13 @@ public class CreateInvoiceRequest implements InvoiceExtendedFields {
     @jakarta.validation.constraints.DecimalMax(value = "100", message = "Discount percent must be <= 100")
     private java.math.BigDecimal discountPercent;
 
+    /**
+     * Discount presentation (V45): FULL = invoice-level percent (above),
+     * INDIVIDUAL = per-line percents on each item. Absent/null = none
+     * configured — every legacy client and row.
+     */
+    private com.insideinvoice.invoice.entity.DiscountType discountType;
+
     @Valid
     @NotEmpty(message = "At least one invoice item is required")
     private List<InvoiceItemRequest> items;

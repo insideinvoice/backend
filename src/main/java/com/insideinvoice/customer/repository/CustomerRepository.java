@@ -38,6 +38,9 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     Optional<Customer> findByEmailAndBusinessId(String email, Long businessId);
 
+    /** Case-insensitive so "Acme@x.com" and "acme@x.com" are the same customer. */
+    Optional<Customer> findByEmailIgnoreCaseAndBusinessId(String email, Long businessId);
+
     Optional<Customer> findByPhoneAndBusinessId(String phone, Long businessId);
 
     /**

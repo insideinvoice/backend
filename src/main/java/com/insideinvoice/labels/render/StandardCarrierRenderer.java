@@ -21,8 +21,8 @@ import java.util.Locale;
  */
 public class StandardCarrierRenderer extends AbstractShippingRenderer {
 
-    protected static final DateTimeFormatter DATE_FMT =
-            DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH);
+    /** ISO 8601 (yyyy-MM-dd) — unambiguous in every country, sorts correctly. */
+    protected static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ISO_LOCAL_DATE;
 
     @Override
     public LabelPreset preset() {
@@ -73,8 +73,10 @@ public class StandardCarrierRenderer extends AbstractShippingRenderer {
         canvas.fillBlack();
         canvas.fillRect(m, y, wMm - 2 * m, h);
         canvas.fillWhite();
+        canvas.textColorWhite();
         canvas.text("RETURN", wMm / 2, y + (h - LabelUnits.ptToMm(16)) / 2, 16, true,
                 PdfCanvas.Align.CENTER);
+        canvas.textColorBlack();
         canvas.fillBlack();
     }
 
@@ -181,7 +183,7 @@ public class StandardCarrierRenderer extends AbstractShippingRenderer {
         canvas.text(carrier, rx, ry, carrierSize, true, PdfCanvas.Align.LEFT);
         ry += LabelUnits.ptToMm(carrierSize * LabelSizes.LINE_HEIGHT) + 0.4;
         String shipDate = spec.getShipDate() == null ? "" : "SHIP DATE: "
-                + DATE_FMT.format(spec.getShipDate()).toUpperCase(Locale.ENGLISH);
+                + DATE_FMT.format(spec.getShipDate());
         String weight = blank(spec.getWeightKg()) ? "" : "WT: " + spec.getWeightKg() + " KG";
         String dims = blank(spec.getDimsCm()) ? "" : "DIM: " + spec.getDimsCm() + " CM";
         String carton = "CARTON " + index + " OF " + total;
@@ -270,11 +272,15 @@ public class StandardCarrierRenderer extends AbstractShippingRenderer {
         canvas.fillBlack();
         canvas.fillRect(bx + 0.5, by + 0.5, boxW - 1, invH);
         canvas.fillWhite();
+        // Light-on-dark: the text colour must be switched explicitly, otherwise the
+        // code prints black on black and the whole band reads as an empty block.
+        canvas.textColorWhite();
         String code = upper(spec.serviceOrDefault(), spec.getCarrier() == null ? "SVC"
                 : spec.getCarrier());
         double codeSize = canvas.fitFontSize(code, boxW - 3, LabelSizes.T_SERVICE_BIG, 16, true);
         canvas.text(code, bx + boxW / 2, by + (invH - LabelUnits.ptToMm(codeSize)) / 2,
                 codeSize, true, PdfCanvas.Align.CENTER);
+        canvas.textColorBlack();
         canvas.fillBlack();
 
         double y = by + invH + 1.2;
@@ -307,9 +313,13 @@ public class StandardCarrierRenderer extends AbstractShippingRenderer {
         double rx = m + dm + 3;
         double rw = cw - dm - 3;
         double y = z3 + 1.2;
-        canvas.text("TRACKING #:", rx, y, 6.5, true, PdfCanvas.Align.LEFT);
+        boolean track = hasTracking(spec);
+        // Without a carrier tracking number the label's own reference is the
+        // scannable ID — caption it as such instead of printing a placeholder.
+        canvas.text(track ? "TRACKING #:" : "LABEL #:", rx, y, 6.5, true, PdfCanvas.Align.LEFT);
         y += LabelUnits.ptToMm(6.5 * LabelSizes.LINE_HEIGHT) + 0.3;
-        String tracking = groupTracking(spec.barcodePayload());
+        String value = heroValue(spec);
+        String tracking = track ? groupTracking(value) : value;
         double tSize = canvas.fitFontSize(tracking, rw, LabelSizes.T_TRACKING, 7.5, true);
         canvas.text(tracking, rx, y, tSize, true, PdfCanvas.Align.LEFT);
         y += LabelUnits.ptToMm(tSize * LabelSizes.LINE_HEIGHT) + 0.5;
@@ -349,7 +359,7 @@ public class StandardCarrierRenderer extends AbstractShippingRenderer {
         double barBottom = canvas.barcodeLinear(matrix, m, y, cw, barH, 10, 2);
         y = barBottom + 1.5;
 
-        String hrt = groupTracking(payload);
+        String hrt = hasTracking(spec) ? groupTracking(payload) : payload;
         double hrtSize = canvas.fitFontSize(hrt, cw - 2, LabelSizes.T_BARCODE_TEXT, 7, true);
         canvas.text(hrt, wMm / 2, y, hrtSize, true, PdfCanvas.Align.CENTER);
         y += LabelUnits.ptToMm(hrtSize * LabelSizes.LINE_HEIGHT) + 0.5;
@@ -554,14 +564,33 @@ public class StandardCarrierRenderer extends AbstractShippingRenderer {
                 spec.serviceOrDefault());
     }
 
+    /** True when the shipment carries a real carrier tracking number. */
+    protected static boolean hasTracking(ShippingLabelSpec spec) {
+        return !blank(spec.getTrackingNumber());
+    }
+
+    /**
+     * The single value shown under the hero barcode: the first tracking number
+     * when one exists, otherwise the label's own reference (invoice / label no).
+     */
+    protected String heroValue(ShippingLabelSpec spec) {
+        if (!hasTracking(spec)) {
+            return spec.barcodePayload();
+        }
+        String[] parts = spec.getTrackingNumber().split("[,;]");
+        return parts[0].trim();
+    }
+
     protected String billingText(ShippingLabelSpec spec) {
         String type = spec.getBillingType();
         if (blank(type)) {
             return "";
         }
         return switch (type.toUpperCase(Locale.ENGLISH)) {
+            // Currency-neutral: the shipper enters the amount in whatever currency
+            // the shipment settles in, so no symbol is assumed here.
             case "COD" -> blank(spec.getCodAmount()) ? "COD"
-                    : "COD ₹ " + spec.getCodAmount();
+                    : "COD " + spec.getCodAmount();
             case "THIRD_PARTY", "3RD PARTY", "BILL TO THIRD PARTY" -> "BILL TO THIRD PARTY";
             default -> "PREPAID";
         };
@@ -581,7 +610,7 @@ public class StandardCarrierRenderer extends AbstractShippingRenderer {
         if (ts == null) {
             return "";
         }
-        return DATE_FMT.format(ts.toLocalDate()).toUpperCase(Locale.ENGLISH)
+        return DATE_FMT.format(ts.toLocalDate())
                 + " " + String.format(Locale.ENGLISH, "%02d:%02d", ts.getHour(), ts.getMinute());
     }
 

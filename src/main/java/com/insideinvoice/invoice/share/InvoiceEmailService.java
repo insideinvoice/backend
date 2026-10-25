@@ -43,9 +43,6 @@ public class InvoiceEmailService {
     @Value("${app.frontend-base-url:https://insideinvoice.in}")
     private String defaultFrontendBaseUrl;
 
-    @Value("${app.mail.logo-url:}")
-    private String sellerLogoUrl;
-
     /**
      * @return the recipient address the invoice was sent to
      */
@@ -82,24 +79,21 @@ public class InvoiceEmailService {
         String shareUrl = base + "/i/" + share.getToken();
 
         InvoiceEmailTemplate.Content content =
-                InvoiceEmailTemplate.build(invoice, customer, business, shareUrl, logoRefFor(business));
+                InvoiceEmailTemplate.build(invoice, customer, business, shareUrl);
 
         String fromName = safeName(business.getBusinessName()) + " via Inside Invoice";
-        // Two parts when both exist: the client PDF + the seller logo as an
-        // INLINE content-id part so the email header shows the ACTUAL uploaded
-        // logo (data: URIs are stripped by Gmail, static config URLs go stale).
-        com.insideinvoice.email.EmailAttachment logoAttachment = logoAttachment(business.getLogo());
+        // At most one part: the client-rendered PDF. The seller logo is never
+        // embedded — the email header is text-only, so nothing in the message
+        // can arrive broken or be stripped by a mail client.
         java.util.List<com.insideinvoice.email.EmailAttachment> parts = new java.util.ArrayList<>();
         com.insideinvoice.email.EmailAttachment pdf = toPdfAttachment(pdfAttachment, pdfFilename, invoice.getInvoiceNumber());
         if (pdf != null) parts.add(pdf);
-        if (logoAttachment != null) parts.add(logoAttachment);
         emailService.sendHtmlEmail(fromName, customer.getEmail().trim(),
                 content.subject(), content.html(), content.text(),
                 notBlank(business.getEmail()) ? business.getEmail().trim() : null, parts);
 
         log.info("Invoice email sent | invoice: {} | to: {} | parts: {}",
-                invoice.getInvoiceNumber(), customer.getEmail(),
-                (pdf != null ? "pdf" : "-") + (logoAttachment != null ? "+logo" : ""));
+                invoice.getInvoiceNumber(), customer.getEmail(), pdf != null ? "pdf" : "-");
         return customer.getEmail().trim();
     }
 
@@ -160,53 +154,5 @@ public class InvoiceEmailService {
 
     private static boolean notBlank(String value) {
         return value != null && !value.isBlank();
-    }
-
-    // ---------------------------------------------------------------- logo
-    // The uploaded logo is Base64 (optionally wrapped in a data URI). It is
-    // decoded once per send; a decodable PNG/JPEG under the size cap becomes
-    // an INLINE content-id attachment ("seller-logo") that the HTML references
-    // via cid:. Anything else falls back to the configured static logo URL.
-
-    private static final String LOGO_CID = "seller-logo";
-    private static final int MAX_LOGO_BYTES = 512 * 1024; // inline part cap
-
-    /** The HTML head renders the uploaded logo inline when decodable, else the
-     *  configured public URL, else nothing (template hides the image). */
-    private String logoRefFor(Business business) {
-        return logoAttachment(business.getLogo()) != null
-                ? "cid:" + LOGO_CID
-                : (notBlank(sellerLogoUrl) ? sellerLogoUrl : null);
-    }
-
-    private EmailAttachment logoAttachment(String stored) {
-        if (stored == null || stored.isBlank()) return null;
-        String b64 = stored.trim();
-        int comma = b64.indexOf(","); // tolerate a data-URI wrapper
-        if (b64.startsWith("data:image/") && comma > 0) b64 = b64.substring(comma + 1).trim();
-        byte[] bytes;
-        try {
-            bytes = java.util.Base64.getDecoder().decode(b64);
-        } catch (IllegalArgumentException e) {
-            log.warn("Seller logo is not valid base64; email header falls back to text-only");
-            return null;
-        }
-        if (bytes.length == 0 || bytes.length > MAX_LOGO_BYTES) {
-            if (bytes.length > MAX_LOGO_BYTES) log.warn("Seller logo too large ({} bytes) for inline embedding", bytes.length);
-            return null;
-        }
-        // Sniff the raster type — PNG or JPEG only; anything else (SVG etc.)
-        // is not broadly renderable in mail clients.
-        String mime;
-        if (bytes.length >= 8 && (bytes[0] & 0xFF) == 0x89 && bytes[1] == 'P') {
-            mime = "image/png";
-        } else if (bytes.length >= 3 && (bytes[0] & 0xFF) == 0xFF && bytes[1] == (byte) 0xD8 && bytes[2] == (byte) 0xFF) {
-            mime = "image/jpeg";
-        } else {
-            log.info("Seller logo is not PNG/JPEG; email header falls back without it");
-            return null;
-        }
-        return EmailAttachment.inline("seller-logo" + (mime.endsWith("png") ? ".png" : ".jpg"),
-                bytes, mime, LOGO_CID);
     }
 }

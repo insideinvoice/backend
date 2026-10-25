@@ -353,7 +353,10 @@ public class MarkLabelRenderer implements HazmatRenderer {
         double y = top + arrowH + h * 0.05;
         c.fillRgb((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
         double fs = c.fitFontSize(text, w - 20, 14, 8, true);
+        // Match the arrow colour (red in colour mode, black on thermal).
+        c.textColorRgb((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF);
         c.text(text, w / 2, y, fs, true, PdfCanvas.Align.CENTER);
+        c.textColorBlack();
         c.fillBlack();
         ClassDiamondRenderer.drawFooter(c, spec, h - 5.5, w);
     }

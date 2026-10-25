@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -86,7 +87,9 @@ class ProductServiceImplTest {
         ProductResponse created = service.createProduct(createRequest("Service", "   "), 7L);
 
         assertThat(created.getName()).isEqualTo("Service");
-        verify(repository, never()).findByBusinessId(any());
+        // A blank HSN skips ITS lookup — the single call below is the
+        // product-name uniqueness check, which always runs.
+        verify(repository, times(1)).findByBusinessId(any());
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.customer.mapper.CustomerMapper;
 import com.insideinvoice.customer.repository.CustomerRepository;
 import com.insideinvoice.customer.service.CustomerService;
+import com.insideinvoice.exception.DuplicateResourceException;
 import com.insideinvoice.exception.ResourceNotFoundException;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.repository.InvoiceRepository;
@@ -49,24 +50,7 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional
     public CustomerResponse createCustomer(CreateCustomerRequest request, Long businessId) {
-        if (request.getPhone() != null) {
-            Optional<Customer> existingByPhone = customerRepository.findByPhoneAndBusinessId(request.getPhone(), businessId);
-            if (existingByPhone.isPresent()) {
-                Customer existing = updateExistingCustomer(existingByPhone.get(), request);
-                existing = customerRepository.save(existing);
-                log.info("Customer updated (duplicate phone): {} for businessId: {}", existing.getId(), businessId);
-                return customerMapper.toResponse(existing);
-            }
-        }
-        if (request.getEmail() != null) {
-            Optional<Customer> existingByEmail = customerRepository.findByEmailAndBusinessId(request.getEmail(), businessId);
-            if (existingByEmail.isPresent()) {
-                Customer existing = updateExistingCustomer(existingByEmail.get(), request);
-                existing = customerRepository.save(existing);
-                log.info("Customer updated (duplicate email): {} for businessId: {}", existing.getId(), businessId);
-                return customerMapper.toResponse(existing);
-            }
-        }
+        assertIdentityUnique(request.getPhone(), request.getEmail(), businessId, null);
 
         Customer customer = customerMapper.toEntity(request, businessId);
         customer = customerRepository.save(customer);
@@ -74,18 +58,34 @@ public class CustomerServiceImpl implements CustomerService {
         return customerMapper.toResponse(customer);
     }
 
-    private Customer updateExistingCustomer(Customer existing, CreateCustomerRequest request) {
-        existing.setName(request.getName());
-        if (request.getEmail() != null) existing.setEmail(request.getEmail());
-        if (request.getPhone() != null) existing.setPhone(request.getPhone());
-        existing.setBillingAddress(request.getBillingAddress());
-        existing.setShippingAddress(request.getShippingAddress());
-        existing.setGstIn(request.getGstIn());
-        existing.setCity(request.getCity());
-        existing.setState(request.getState());
-        existing.setCountry(request.getCountry());
-        existing.setPincode(request.getPincode());
-        return existing;
+    /**
+     * Phone + email act as the customer's natural key, but ONLY inside a single
+     * business. Every lookup is scoped by businessId, so two businesses (tenants)
+     * may hold the same phone/email — the same person can be a customer of both.
+     * A repeat inside ONE business is rejected with 409 instead of being merged
+     * into the existing row.
+     *
+     * @param excludeCustomerId the customer being updated (null on create)
+     */
+    private void assertIdentityUnique(String phone, String email, Long businessId, Long excludeCustomerId) {
+        if (phone != null && !phone.isBlank()) {
+            customerRepository.findByPhoneAndBusinessId(phone, businessId)
+                    .filter(existing -> excludeCustomerId == null || !excludeCustomerId.equals(existing.getId()))
+                    .ifPresent(existing -> {
+                        throw new DuplicateResourceException(String.format(
+                                "Phone '%s' is already used by customer '%s' in your business",
+                                phone, existing.getName()));
+                    });
+        }
+        if (email != null && !email.isBlank()) {
+            customerRepository.findByEmailIgnoreCaseAndBusinessId(email, businessId)
+                    .filter(existing -> excludeCustomerId == null || !excludeCustomerId.equals(existing.getId()))
+                    .ifPresent(existing -> {
+                        throw new DuplicateResourceException(String.format(
+                                "Email '%s' is already used by customer '%s' in your business",
+                                email, existing.getName()));
+                    });
+        }
     }
 
     @Override
@@ -121,6 +121,12 @@ public class CustomerServiceImpl implements CustomerService {
         Customer customer = customerRepository.findByIdAndBusinessId(id, businessId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id));
 
+        // Effective values after the partial update (null/blank = keep, or clear to "")
+        // must not collide with ANOTHER customer of the same business.
+        String phone = request.getPhone() != null ? request.getPhone() : customer.getPhone();
+        String email = request.getEmail() != null ? request.getEmail() : customer.getEmail();
+        assertIdentityUnique(phone, email, businessId, id);
+
         customerMapper.updateEntity(customer, request);
         customer = customerRepository.save(customer);
 
@@ -138,7 +144,7 @@ public class CustomerServiceImpl implements CustomerService {
             }
         }
         if (email != null && !email.isBlank()) {
-            Optional<Customer> byEmail = customerRepository.findByEmailAndBusinessId(email, businessId);
+            Optional<Customer> byEmail = customerRepository.findByEmailIgnoreCaseAndBusinessId(email, businessId);
             if (byEmail.isPresent()) {
                 log.info("Customer found by email: {} for businessId: {}", email, businessId);
                 return customerMapper.toResponse(byEmail.get());

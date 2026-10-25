@@ -88,6 +88,19 @@ public class ProductController {
         }
     }
 
+    @GetMapping("/by-name")
+    @Operation(summary = "Find product by name (case-insensitive)")
+    public ResponseEntity<ApiResponse<ProductResponse>> findByName(
+            @RequestParam String name,
+            @CurrentUser UserPrincipal currentUser) {
+        try {
+            ProductResponse response = productService.findByName(name, currentUser.getBusinessId());
+            return ResponseEntity.ok(ApiResponse.success("Product found", response));
+        } catch (com.insideinvoice.exception.ResourceNotFoundException e) {
+            return ResponseEntity.ok(ApiResponse.success("No product found with this name", null));
+        }
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Delete product")
     public ResponseEntity<ApiResponse<Void>> deleteProduct(

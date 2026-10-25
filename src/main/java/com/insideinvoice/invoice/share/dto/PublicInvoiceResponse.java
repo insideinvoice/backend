@@ -10,6 +10,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+import com.insideinvoice.invoice.entity.DiscountType;
+
 /**
  * Allow-listed payload for anonymous public invoice links.
  *
@@ -36,6 +38,9 @@ public class PublicInvoiceResponse {
     private BigDecimal taxAmount;
     private BigDecimal grandTotal;
     private BigDecimal discountPercent;
+
+    /** FULL | INDIVIDUAL | null (none/legacy) — see entity.DiscountType. */
+    private DiscountType discountType;
 
     private String template;
     private String paperSize;
@@ -195,5 +200,7 @@ public class PublicInvoiceResponse {
         private BigDecimal taxableValue;
         private BigDecimal taxAmount;
         private BigDecimal total;
+        /** Line discount % (V45 INDIVIDUAL mode) — null on every legacy row. */
+        private BigDecimal discountPercent;
     }
 }

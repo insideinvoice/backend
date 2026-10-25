@@ -11,6 +11,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.insideinvoice.invoice.entity.DiscountType;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -36,6 +38,8 @@ public class InvoiceResponse {
     private BigDecimal taxAmount;
     private BigDecimal grandTotal;
     private BigDecimal discountPercent;
+    /** FULL | INDIVIDUAL | null (none/legacy) — see entity.DiscountType. */
+    private DiscountType discountType;
     private String shippingAddress;
     private Boolean reverseCharge;
     private BigDecimal cessPercentage;

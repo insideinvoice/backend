@@ -61,25 +61,6 @@ public final class InvoiceEmailTemplate {
     }
 
     public static Content build(Invoice invoice, Customer customer, Business business, String shareUrl) {
-        return build(invoice, customer, business, shareUrl, null);
-    }
-
-    /** The HTML head renders the seller logo either from a public URL or an
-     *  inline content-id reference ({@code cid:...}); anything else → no image. */
-    private static boolean renderableLogo(String logoRef) {
-        if (logoRef == null) return false;
-        String v = logoRef.trim();
-        return (!v.isEmpty() && v.matches("https?://\\S+")) || v.startsWith("cid:");
-    }
-
-    /**
-     * @param logoRef optional logo source — a public URL or an inline
-     *                {@code cid:<content-id>} reference (rendered max 40px
-     *                high, beside the business name). Blank/absent falls back
-     *                to the text-only header.
-     */
-    public static Content build(Invoice invoice, Customer customer, Business business,
-                                String shareUrl, String logoRef) {
         String typeLabel = invoice.getInvoiceType() == InvoiceType.PROFORMA_INVOICE
                 ? "Proforma Invoice" : "Tax Invoice";
         String businessName = blankTo(safe(business.getBusinessName()), "Your Business");
@@ -88,7 +69,7 @@ public final class InvoiceEmailTemplate {
                 + " \u2014 " + businessName
                 + " | Rs. " + inr(invoice.getGrandTotal());
 
-        String html = buildHtml(invoice, customer, business, businessName, typeLabel, shareUrl, logoRef);
+        String html = buildHtml(invoice, customer, business, businessName, typeLabel, shareUrl);
         String text = buildText(invoice, customer, business, businessName, typeLabel, shareUrl);
         return new Content(subject, html, text);
     }
@@ -96,11 +77,11 @@ public final class InvoiceEmailTemplate {
     // ---------------------------------------------------------------- HTML
 
     private static String buildHtml(Invoice invoice, Customer customer, Business business,
-                                    String businessName, String typeLabel, String shareUrl, String logoRef) {
+                                    String businessName, String typeLabel, String shareUrl) {
         BigDecimal subtotal = nvl(invoice.getSubtotal());
         BigDecimal tax = nvl(invoice.getTaxAmount());
         BigDecimal grand = nvl(invoice.getGrandTotal());
-        BigDecimal discount = InvoiceMapper.discountAmount(subtotal, invoice.getDiscountPercent());
+        BigDecimal discount = InvoiceMapper.discountAmount(invoice);
         BigDecimal taxable = subtotal.subtract(discount).setScale(2, RoundingMode.HALF_UP);
         BigDecimal roundOff = grand.subtract(taxable.add(tax)).setScale(2, RoundingMode.HALF_UP);
         BigDecimal ratio = subtotal.signum() > 0
@@ -176,13 +157,9 @@ public final class InvoiceEmailTemplate {
             .append("<tr><td class=\"px\" style=\"padding:20px 32px 18px;\">")
             .append("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr>");
 
-        if (renderableLogo(logoRef)) {
-            html.append("<td valign=\"middle\" style=\"padding-right:12px;\">")
-                .append("<img src=\"").append(esc(logoRef.trim()))
-                .append("\" width=\"40\" height=\"40\" alt=\"").append(esc(businessName))
-                .append("\" style=\"display:block;height:40px;width:auto;max-height:40px;border:0;border-radius:8px;\">")
-                .append("</td>");
-        }
+        // Text-only header: the seller logo is deliberately never rendered in
+        // the email (no <img>, no inline cid: part) — the business name carries
+        // the brand and nothing can arrive broken or blocked in the client.
         // Business name fills the remaining space via table auto-layout (no
         // width:100% hint — a percentage cell + the nowrap pill overflows the
         // table past the viewport on mobile). The pill cell kills its line-box
@@ -245,20 +222,22 @@ public final class InvoiceEmailTemplate {
         }
         html.append("</td>");
 
-        // Bulletproof button (table cell + padding renders in Outlook). Real
-        // vertical padding on the anchor (not line-height) keeps the entire
-        // pill clickable — the Gmail app strips line-height from links, which
-        // otherwise shrinks the tap target to the text line only. Desktop
-        // Outlook needs mso-padding-alt to honour anchor padding.
+        // Bulletproof button. The anchor is display:block so it fills the
+        // indigo cell edge-to-edge: every pixel of the pill opens the link —
+        // not just the words. Mail clients that strip padding or shrink
+        // inline boxes from links (Gmail app) still leave the block box
+        // covering the whole cell, and text-align:center keeps it centred
+        // when the cell stretches full-width on mobile. Desktop Outlook
+        // honours the padding through mso-padding-alt.
         html.append("<td valign=\"middle\" align=\"right\" class=\"hero-cta\"")
             .append(" style=\"padding:26px 20px 26px 16px;white-space:nowrap;\">")
             .append("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"border-collapse:separate;\"><tr>")
             .append("<td align=\"center\" bgcolor=\"").append(INDIGO).append("\"")
             .append(" style=\"background-color:").append(INDIGO).append(";border-radius:6px;white-space:nowrap;\">")
             .append("<a href=\"").append(esc(shareUrl)).append("\"")
-            .append(" style=\"display:inline-block;padding:13px 28px;line-height:18px;font-family:").append(FONT).append(";")
+            .append(" style=\"display:block;padding:13px 28px;line-height:18px;font-family:").append(FONT).append(";")
             .append("font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;")
-            .append("white-space:nowrap;mso-padding-alt:13px 28px;\">View Invoice</a>")
+            .append("white-space:nowrap;text-align:center;mso-padding-alt:13px 28px;\">View Invoice</a>")
             .append("</td></tr></table>")
             .append("<p style=\"margin:10px 0 0;font-size:12px;color:").append(SUBTLE).append(";text-align:right;\">")
             .append("<a href=\"").append(esc(shareUrl)).append("\" style=\"color:").append(MUTED)
@@ -543,7 +522,7 @@ public final class InvoiceEmailTemplate {
         BigDecimal subtotal = nvl(invoice.getSubtotal());
         BigDecimal tax = nvl(invoice.getTaxAmount());
         BigDecimal grand = nvl(invoice.getGrandTotal());
-        BigDecimal discount = InvoiceMapper.discountAmount(subtotal, invoice.getDiscountPercent());
+        BigDecimal discount = InvoiceMapper.discountAmount(invoice);
         BigDecimal taxable = subtotal.subtract(discount).setScale(2, RoundingMode.HALF_UP);
         BigDecimal roundOff = grand.subtract(taxable.add(tax)).setScale(2, RoundingMode.HALF_UP);
         BigDecimal ratio = subtotal.signum() > 0

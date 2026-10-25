@@ -43,6 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.ByteArrayOutputStream;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -388,12 +389,20 @@ public class HazmatLabelServiceImpl implements HazmatLabelService {
                 .lithiumUnList(e.getLithiumUnList())
                 .lithiumPackingInstruction(e.getLithiumPackingInstruction())
                 .generatedBy(e.getGeneratedBy())
+                .printTimestamp(LocalDateTime.now())
                 .build();
     }
 
     private HazmatSpec specFromRequest(CreateHazmatLabelRequest request) {
         return HazmatSpec.builder()
-                .labelNumber(request.getInvoiceId() != null ? "HZL-INV-" + request.getInvoiceId() : "PREVIEW")
+                // Real saved number when the editor sends one; otherwise an
+                // invoice-linked fallback — NEVER the word "PREVIEW", which used
+                // to print on every download from the form. Null renders as an
+                // empty footer slot (nv() + the isEmpty guard in drawFooter).
+                .labelNumber(
+                        request.getLabelNumber() != null && !request.getLabelNumber().isBlank()
+                                ? request.getLabelNumber().trim()
+                                : (request.getInvoiceId() != null ? "HZL-INV-" + request.getInvoiceId() : null))
                 .labelType(request.getLabelType() != null ? request.getLabelType() : com.insideinvoice.labels.enums.HazmatLabelType.CLASS_DIAMOND)
                 .labelSize(request.getLabelSize())
                 .colorMode(request.getColorMode() != null ? request.getColorMode() : ColorMode.COLOR)
@@ -422,6 +431,7 @@ public class HazmatLabelServiceImpl implements HazmatLabelService {
                 .lithiumUnList(request.getLithiumUnList())
                 .lithiumPackingInstruction(request.getLithiumPackingInstruction())
                 .generatedBy(request.getGeneratedBy())
+                .printTimestamp(LocalDateTime.now())
                 .build();
     }
 

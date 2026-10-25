@@ -45,4 +45,9 @@ public class InvoiceItemRequest {
     @DecimalMin(value = "0.00", message = "GST percentage must be at least 0")
     @DecimalMax(value = "40.00", message = "GST percentage must not exceed 40")
     private BigDecimal gstPercentage;
+
+    /** Per-line discount % (0–100) — used when the invoice's discountType is INDIVIDUAL. */
+    @DecimalMin(value = "0.00", message = "Item discount must be at least 0")
+    @DecimalMax(value = "100.00", message = "Item discount must not exceed 100")
+    private BigDecimal discountPercent;
 }

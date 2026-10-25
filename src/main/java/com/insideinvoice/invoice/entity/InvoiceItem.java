@@ -71,4 +71,13 @@ public class InvoiceItem {
 
     @Column(name = "total", nullable = false, precision = 14, scale = 2)
     private BigDecimal total;
+
+    /**
+     * Line discount % (V45, 0–100). Only meaningful when the invoice's
+     * discountType is INDIVIDUAL; NULL/0 on every other row. Display-only —
+     * the line's gross value stays in {@link #taxableValue}, the net feeds
+     * tax via InvoiceMapper.calculateInvoiceTotals.
+     */
+    @Column(name = "discount_percent", precision = 5, scale = 2)
+    private BigDecimal discountPercent;
 }

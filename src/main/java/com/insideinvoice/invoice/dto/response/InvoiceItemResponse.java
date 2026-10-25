@@ -27,4 +27,6 @@ public class InvoiceItemResponse {
     private BigDecimal taxableValue;
     private BigDecimal taxAmount;
     private BigDecimal total;
+    /** Line discount % (V45 INDIVIDUAL mode) — null on every legacy row. */
+    private BigDecimal discountPercent;
 }

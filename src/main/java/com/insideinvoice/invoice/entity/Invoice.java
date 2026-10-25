@@ -68,6 +68,15 @@ public class Invoice extends BaseEntity {
     @Column(name = "discount_percent")
     private BigDecimal discountPercent;
 
+    /**
+     * Discount presentation (V45): NULL = none/legacy (treated as FULL when
+     * discount_percent > 0), FULL = invoice-level %, INDIVIDUAL = per-line %
+     * on invoice_items.discount_percent (e-Invoice template only).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discount_type")
+    private DiscountType discountType;
+
     @Column(name = "payment_terms")
     private String paymentTerms;
 

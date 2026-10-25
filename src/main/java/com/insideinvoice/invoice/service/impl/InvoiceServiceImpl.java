@@ -246,7 +246,8 @@ public class InvoiceServiceImpl implements InvoiceService {
             invoice.setTaxMode(requestedTaxMode);
         }
         invoice.setBillingMode(BillingMode.fromRaw(request.getBillingMode()));
-        invoice.setDiscountPercent(request.getDiscountPercent() != null ? request.getDiscountPercent() : BigDecimal.ZERO);
+        invoice.setDiscountType(request.getDiscountType());
+        invoice.setDiscountPercent(InvoiceMapper.normalizeInvoiceDiscount(request.getDiscountType(), request.getDiscountPercent()));
 
         invoice.getItems().clear();
         for (InvoiceItemRequest itemRequest : request.getItems()) {
@@ -315,7 +316,8 @@ public class InvoiceServiceImpl implements InvoiceService {
             invoice.setTaxMode(requestedTaxMode);
         }
         invoice.setBillingMode(BillingMode.fromRaw(request.getBillingMode()));
-        invoice.setDiscountPercent(request.getDiscountPercent() != null ? request.getDiscountPercent() : BigDecimal.ZERO);
+        invoice.setDiscountType(request.getDiscountType());
+        invoice.setDiscountPercent(InvoiceMapper.normalizeInvoiceDiscount(request.getDiscountType(), request.getDiscountPercent()));
 
         invoice.getItems().clear();
         for (InvoiceItemRequest itemRequest : request.getItems()) {

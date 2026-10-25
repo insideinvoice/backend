@@ -207,10 +207,10 @@ class InvoiceEmailTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("The seller's uploaded logo is embedded inline so the email header shows it")
-    void uploadedLogoIsEmbeddedInline() throws Exception {
-        // A real (tiny) PNG — the mailer is mocked, so only the parts list and
-        // the HTML body are asserted.
+    @DisplayName("The seller's uploaded logo is never embedded — the email header stays text-only")
+    void uploadedLogoIsNeverEmbedded() throws Exception {
+        // A real (tiny) PNG seeded on the business; the mailer is mocked, so
+        // only the parts list and the HTML body are asserted.
         byte[] png = java.util.Base64.getDecoder().decode(
                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
         com.insideinvoice.business.entity.Business business =
@@ -230,15 +230,13 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         verify(emailService, times(1)).sendHtmlEmail(
                 any(), any(), any(), html.capture(), any(), any(), parts.capture());
 
-        // Exactly one part: the logo, embedded as an inline content-id part.
-        assertThat(parts.getValue()).hasSize(1);
-        com.insideinvoice.email.EmailAttachment logo = parts.getValue().get(0);
-        assertThat(logo.mimeType()).isEqualTo("image/png");
-        assertThat(logo.content()).isEqualTo(png);
-        assertThat(logo.inlineContentId()).isNotBlank();
+        // No logo part goes out (nothing would reference it) — the email is
+        // text-only in its header, so no inline cid: image is attached.
+        assertThat(parts.getValue()).isEmpty();
 
-        // The HTML references it by cid: a data: URI would be stripped by Gmail.
-        assertThat(html.getValue()).contains("cid:" + logo.inlineContentId());
+        // The body carries no image at all.
+        assertThat(html.getValue()).doesNotContain("<img");
+        assertThat(html.getValue()).doesNotContain("cid:");
     }
 
     @Test

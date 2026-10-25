@@ -65,7 +65,10 @@ public class Fnsku30UpRenderer extends StandardCarrierRenderer {
             canvas.fillBlack();
             canvas.fillRect(w - m - chipW, y - 0.5, chipW, LabelUnits.ptToMm(chipSize * 1.4));
             canvas.fillWhite();
+            // Chip is light-on-dark: switch the text colour too (otherwise black on black).
+            canvas.textColorWhite();
             canvas.text(label, w - m - chipW / 2, y, chipSize, true, PdfCanvas.Align.CENTER);
+            canvas.textColorBlack();
             canvas.fillBlack();
         }
         double titleW = w - 2 * m - chipW - 2;

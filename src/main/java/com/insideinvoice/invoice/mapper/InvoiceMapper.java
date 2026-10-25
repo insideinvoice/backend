@@ -6,6 +6,7 @@ import com.insideinvoice.invoice.dto.request.InvoiceItemRequest;
 import com.insideinvoice.invoice.dto.response.InvoiceItemResponse;
 import com.insideinvoice.invoice.dto.response.InvoiceResponse;
 import com.insideinvoice.invoice.entity.BillingMode;
+import com.insideinvoice.invoice.entity.DiscountType;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.entity.InvoiceItem;
 import com.insideinvoice.invoice.entity.InvoiceStatus;
@@ -41,7 +42,8 @@ public class InvoiceMapper {
                 .otherReferences(request.getOtherReferences())
                 .destination(request.getDestination())
                 .paymentMode(request.getPaymentMode())
-                .discountPercent(request.getDiscountPercent() != null ? request.getDiscountPercent() : BigDecimal.ZERO)
+                .discountPercent(normalizeInvoiceDiscount(request.getDiscountType(), request.getDiscountPercent()))
+                .discountType(request.getDiscountType())
                 .billingMode(BillingMode.fromRaw(request.getBillingMode()))
                 .createdBy(userId)
                 .build();
@@ -108,10 +110,32 @@ public class InvoiceMapper {
                 .qty(qty)
                 .rate(rate)
                 .gstPercentage(gstPercentage)
+                .discountPercent(clampPercent(request.getDiscountPercent()))
                 .taxableValue(taxableValue)
                 .taxAmount(taxAmount)
                 .total(total)
                 .build();
+    }
+
+    /**
+     * Per-line discount %, clamped to 0–100 and passed through as null when the
+     * client omits it (every legacy row stays NULL — never coerced to 0 so a
+     * stored "unset" and a stored "0%" remain distinguishable).
+     */
+    public static BigDecimal clampPercent(BigDecimal pct) {
+        if (pct == null) return null;
+        return pct.max(BigDecimal.ZERO).min(BigDecimal.valueOf(100));
+    }
+
+    /**
+     * Invoice-level discount percent to persist: INDIVIDUAL lives entirely on
+     * the lines, so the invoice-level column is forced to 0 (the summary and
+     * email can never print a phantom "Full" percent on an individual invoice).
+     * FULL/null keeps the raw value — legacy rows are byte-identical.
+     */
+    public static BigDecimal normalizeInvoiceDiscount(DiscountType type, BigDecimal discountPercent) {
+        if (type == DiscountType.INDIVIDUAL) return BigDecimal.ZERO;
+        return discountPercent != null ? discountPercent : BigDecimal.ZERO;
     }
 
     /**
@@ -125,6 +149,23 @@ public class InvoiceMapper {
         return nvl(subtotal).multiply(pct).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     }
 
+    /**
+     * Display discount for a whole invoice, honouring the V45 mode: INDIVIDUAL
+     * sums the per-line discounts (each rounded exactly as the totals engine
+     * rounds them), FULL/legacy keeps the invoice-level formula. Rendering
+     * layers (e-mail, PDF) call this instead of reading discountPercent, which
+     * is forced to 0 on individual invoices.
+     */
+    public static BigDecimal discountAmount(Invoice invoice) {
+        if (invoice.getDiscountType() == DiscountType.INDIVIDUAL) {
+            BigDecimal sum = invoice.getItems().stream()
+                    .map(i -> discountAmount(i.getTaxableValue(), i.getDiscountPercent()))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            return sum.setScale(2, RoundingMode.HALF_UP);
+        }
+        return discountAmount(invoice.getSubtotal(), invoice.getDiscountPercent());
+    }
+
     private static BigDecimal nvl(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
     }
@@ -135,22 +176,51 @@ public class InvoiceMapper {
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal discountAmount = discountAmount(subtotal, invoice.getDiscountPercent());
-        BigDecimal taxableAmount = subtotal.subtract(discountAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal discountAmount;
+        BigDecimal taxableAmount;
+        BigDecimal taxAmount;
 
-        // GST must be computed on the discounted taxable value, not the full
-        // amount — otherwise a discounted invoice shows a higher tax than due.
-        BigDecimal ratio = subtotal.compareTo(BigDecimal.ZERO) > 0
-                ? taxableAmount.divide(subtotal, 10, RoundingMode.HALF_UP)
-                : BigDecimal.ONE;
+        if (invoice.getDiscountType() == DiscountType.INDIVIDUAL) {
+            // Per-line discounts (V45): every line's GST applies to ITS OWN
+            // net value (CGST Act s.15(3)(b)) — no invoice-level pro-rating.
+            // Mirrors invoiceTotals.js line-for-line so the stored invoice and
+            // every screen agree to the paisa.
+            BigDecimal discountSum = BigDecimal.ZERO;
+            BigDecimal taxSum = BigDecimal.ZERO;
+            for (InvoiceItem item : invoice.getItems()) {
+                BigDecimal gross = item.getTaxableValue() != null ? item.getTaxableValue() : BigDecimal.ZERO;
+                BigDecimal pct = clampPercent(item.getDiscountPercent());
+                if (pct == null) pct = BigDecimal.ZERO;
+                BigDecimal lineDiscount = gross.multiply(pct)
+                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                BigDecimal net = gross.subtract(lineDiscount);
+                discountSum = discountSum.add(lineDiscount);
+                taxSum = taxSum.add(net.multiply(item.getGstPercentage())
+                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+            }
+            discountAmount = discountSum.setScale(2, RoundingMode.HALF_UP);
+            taxableAmount = subtotal.subtract(discountAmount).setScale(2, RoundingMode.HALF_UP);
+            taxAmount = taxSum.setScale(2, RoundingMode.HALF_UP);
+        } else {
+            // FULL (and every legacy NULL) — the original invoice-level path,
+            // unchanged: discount on the subtotal, GST pro-rated by ratio.
+            discountAmount = discountAmount(subtotal, invoice.getDiscountPercent());
+            taxableAmount = subtotal.subtract(discountAmount).setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal taxAmount = invoice.getItems().stream()
-                .map(item -> item.getTaxableValue()
-                        .multiply(ratio)
-                        .multiply(item.getGstPercentage())
-                        .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP))
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
+            // GST must be computed on the discounted taxable value, not the full
+            // amount — otherwise a discounted invoice shows a higher tax than due.
+            BigDecimal ratio = subtotal.compareTo(BigDecimal.ZERO) > 0
+                    ? taxableAmount.divide(subtotal, 10, RoundingMode.HALF_UP)
+                    : BigDecimal.ONE;
+
+            taxAmount = invoice.getItems().stream()
+                    .map(item -> item.getTaxableValue()
+                            .multiply(ratio)
+                            .multiply(item.getGstPercentage())
+                            .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .setScale(2, RoundingMode.HALF_UP);
+        }
 
         // Compensation cess: invoice-level percentage on the discounted
         // taxable value (same base as GST). Zero/null keeps legacy totals.
@@ -209,6 +279,7 @@ public class InvoiceMapper {
                 .taxAmount(invoice.getTaxAmount())
                 .grandTotal(invoice.getGrandTotal())
                 .discountPercent(invoice.getDiscountPercent())
+                .discountType(invoice.getDiscountType())
                 .paymentTerms(invoice.getPaymentTerms())
                 .notes(invoice.getNotes())
                 .status(invoice.getStatus().name())
@@ -263,6 +334,7 @@ public class InvoiceMapper {
                 .qty(item.getQty())
                 .rate(item.getRate())
                 .gstPercentage(item.getGstPercentage())
+                .discountPercent(item.getDiscountPercent())
                 .taxableValue(item.getTaxableValue())
                 .taxAmount(item.getTaxAmount())
                 .total(item.getTotal())

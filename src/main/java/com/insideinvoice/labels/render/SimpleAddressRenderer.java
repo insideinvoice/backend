@@ -72,6 +72,15 @@ public class SimpleAddressRenderer extends StandardCarrierRenderer {
         if (!city.isEmpty() && y2 < budget - 3) {
             double s = canvas.fitFontSize(city, cw - 4, 11.5, 9, true);
             canvas.text(city, m + 3.5, y2, s, true, PdfCanvas.Align.LEFT);
+            y2 += LabelUnits.ptToMm(s * LabelSizes.LINE_HEIGHT);
+        }
+        // Country + phone: essential on international labels — never drop them.
+        if (to != null) {
+            String tail = joinUp(to.getCountry(), blank(to.getPhone()) ? null : "PH: " + to.getPhone());
+            if (!tail.isEmpty() && y2 + 3 < budget) {
+                double s = canvas.fitFontSize(tail, cw - 4, 9, 7, false);
+                canvas.text(tail, m + 3.5, y2, s, false, PdfCanvas.Align.LEFT);
+            }
         }
         rule(canvas, rule1 + LabelSizes.RULE_MM + shipH, m, wMm);
 
@@ -82,7 +91,9 @@ public class SimpleAddressRenderer extends StandardCarrierRenderer {
             double barBottom = canvas.barcodeLinear(
                     com.insideinvoice.labels.util.BarcodeUtils.code128(spec.trackingForIndex(index)),
                     m, barTop + 0.8, cw, barH, 10, 2);
-            String hrt = groupTracking(spec.trackingForIndex(index));
+            String raw = spec.trackingForIndex(index);
+            // Only real tracking numbers are grouped; a bare reference stays as typed.
+            String hrt = hasTracking(spec) ? groupTracking(raw) : raw;
             double hs = canvas.fitFontSize(hrt, cw - 2, LabelSizes.T_BARCODE_TEXT, 7, true);
             canvas.text(hrt, wMm / 2, barBottom + 1, hs, true, PdfCanvas.Align.CENTER);
         }

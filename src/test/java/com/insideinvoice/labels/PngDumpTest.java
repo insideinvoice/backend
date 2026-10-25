@@ -37,7 +37,7 @@ class PngDumpTest {
                 .ergGuide("")
                 .consignor(LabelAddress.builder().name("RS Hardware")
                         .addressLines(new ArrayList<>(List.of("12 MG Road")))
-                        .city("Bengaluru").pincode("560001").build())
+                        .city("Bengaluru").pincode("560001").country("India").build())
                 .printTimestamp(LocalDateTime.of(2026, 10, 6, 9, 30));
     }
 
@@ -88,5 +88,16 @@ class PngDumpTest {
         dump("overpack", base().labelType(HazmatLabelType.OVERPACK).labelSize("hazmat-4x4").build());
         dump("lithium-wh", base().labelType(HazmatLabelType.LITHIUM)
                 .lithiumWh(new BigDecimal("100")).labelSize("hazmat-4x4").build());
+        // 4x6 marking block with a non-Indian consignee (country must print)
+        dump("class3-4x6", base().labelType(HazmatLabelType.CLASS_DIAMOND).hazardClass("3")
+                .packingGroup("II").labelSize("hazmat-4x6")
+                .consignee(LabelAddress.builder().company("Northwind Trading LLC")
+                        .addressLines(new ArrayList<>(List.of("500 Harbor Blvd")))
+                        .city("Rotterdam").state("ZH").pincode("3011 AA")
+                        .country("Netherlands").phone("+31 10 555 0123").build())
+                .build());
+        // A4 placard with the orange UN ID panel
+        dump("placard", base().labelType(HazmatLabelType.PLACARD).hazardClass("3")
+                .packingGroup("II").build());
     }
 }

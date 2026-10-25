@@ -48,7 +48,8 @@ public class PublicInvoiceAssembler {
                 .taxAmount(invoice.getTaxAmount())
                 .grandTotal(invoice.getGrandTotal())
                 .discountPercent(invoice.getDiscountPercent())
-                .template(resolveTemplate(business, invoiceTypeName))
+                .discountType(invoice.getDiscountType())
+                .template(resolveTemplate(invoice, business, invoiceTypeName))
                 .paperSize(resolvePaperSize(business, invoiceTypeName))
                 .billingMode(invoice.getBillingMode() != null ? invoice.getBillingMode().name() : null)
                 .taxMode(invoice.getTaxMode() != null ? invoice.getTaxMode().name() : null)
@@ -95,7 +96,13 @@ public class PublicInvoiceAssembler {
         return invoice.getInvoiceType() != null ? invoice.getInvoiceType().name() : null;
     }
 
-    private String resolveTemplate(Business b, String invoiceTypeName) {
+    private String resolveTemplate(Invoice invoice, Business b, String invoiceTypeName) {
+        // Per-line (INDIVIDUAL) discounts are only rendered by the e-Invoice
+        // template's Disc.% column — a share link must never land on any other
+        // layout, regardless of the business's saved template preference.
+        if (invoice.getDiscountType() == com.insideinvoice.invoice.entity.DiscountType.INDIVIDUAL) {
+            return "template-33";
+        }
         if (b == null) return null;
         String perTypeTemplate = perTypeValue(b, invoiceTypeName, "template");
         return perTypeTemplate != null ? perTypeTemplate : b.getInvoiceTemplate();
@@ -197,6 +204,7 @@ public class PublicInvoiceAssembler {
                 .qty(i.getQty())
                 .rate(i.getRate())
                 .gstPercentage(i.getGstPercentage())
+                .discountPercent(i.getDiscountPercent())
                 .taxableValue(i.getTaxableValue())
                 .taxAmount(i.getTaxAmount())
                 .total(i.getTotal())

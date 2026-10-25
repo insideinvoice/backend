@@ -44,6 +44,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -108,7 +110,9 @@ public class ShippingLabelServiceImpl implements ShippingLabelService {
         e.setServiceLevel(req.getServiceLevel());
         e.setServiceCode(req.getServiceCode());
         e.setTrackingNumber(req.getTrackingNumber());
-        e.setShipDate(req.getShipDate());
+        // Ship date defaults to today — a carrier label always carries a date and
+        // the form does not ask for one explicitly.
+        e.setShipDate(req.getShipDate() != null ? req.getShipDate() : LocalDate.now());
         e.setPackageWeightKg(parseKg(req.getWeightKg()));
         e.setDimsCm(req.getDimsCm());
         int cartons = req.getCartonCount() == null || req.getCartonCount() < 1 ? 1 : Math.min(req.getCartonCount(), 999);
@@ -400,7 +404,9 @@ public class ShippingLabelServiceImpl implements ShippingLabelService {
                 .serviceLevel(e.getServiceLevel())
                 .serviceCode(e.getServiceCode())
                 .trackingNumber(e.getTrackingNumber())
-                .shipDate(e.getShipDate())
+                .shipDate(e.getShipDate() != null ? e.getShipDate() : LocalDate.now())
+                // Rendered-at stamp for the footer (ISO date + HH:mm).
+                .printTimestamp(LocalDateTime.now())
                 .weightKg(e.getPackageWeightKg() == null ? null : e.getPackageWeightKg().toPlainString())
                 .dimsCm(e.getDimsCm())
                 .cartonCount(e.getCartonTotal())
@@ -426,7 +432,11 @@ public class ShippingLabelServiceImpl implements ShippingLabelService {
 
     private ShippingLabelSpec fromCreateRequest(CreateShippingLabelRequest request) {
         ShippingLabelSpec spec = ShippingLabelSpec.builder()
-                .labelNumber(request.getInvoiceNo() != null ? request.getInvoiceNo() : "PREVIEW")
+                // The form sends "" (not null) when no invoice is linked — treat blank
+                // as absent so the label still carries a printable reference instead
+                // of falling through to a placeholder payload.
+                .labelNumber(request.getInvoiceNo() != null && !request.getInvoiceNo().isBlank()
+                        ? request.getInvoiceNo().trim() : "PREVIEW")
                 .preset(request.getPreset() != null ? request.getPreset() : LabelPreset.STANDARD_CARRIER_4X6)
                 .sizeKey(request.getSizeKey())
                 .dpi(request.getDpi())
@@ -438,7 +448,8 @@ public class ShippingLabelServiceImpl implements ShippingLabelService {
                 .serviceLevel(request.getServiceLevel())
                 .serviceCode(request.getServiceCode())
                 .trackingNumber(request.getTrackingNumber())
-                .shipDate(request.getShipDate())
+                .shipDate(request.getShipDate() != null ? request.getShipDate() : LocalDate.now())
+                .printTimestamp(LocalDateTime.now())
                 .weightKg(request.getWeightKg())
                 .dimsCm(request.getDimsCm())
                 .cartonCount(request.getCartonCount())

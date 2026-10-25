@@ -18,4 +18,6 @@ public interface ProductService {
     void deleteProduct(Long id, Long businessId);
 
     ProductResponse findByHsn(String hsn, Long businessId);
+
+    ProductResponse findByName(String name, Long businessId);
 }
