@@ -138,6 +138,21 @@ public class Invoice extends BaseEntity {
     @Column(name = "eway_bill_number")
     private String ewayBillNumber;
 
+    // IRP registration results (V49) — written only by the backend from an
+    // actual provider response. Users never type IRNs.
+    @Column(name = "irn", length = 64)
+    private String irn;
+
+    @Column(name = "ack_no", length = 30)
+    private String ackNo;
+
+    @Column(name = "ack_date")
+    private java.time.LocalDate ackDate;
+
+    /** NOT_REGISTERED | REGISTERED | REGISTERED_MOCK | FAILED */
+    @Column(name = "einvoice_status", length = 20)
+    private String einvoiceStatus;
+
     /* ---- V29: industry-extended optional fields (Rental & Healthcare) ----
      * Nullable, display/reference only — never part of totals or tax math.
      * Only the owning industry's form exposes them; every other industry and

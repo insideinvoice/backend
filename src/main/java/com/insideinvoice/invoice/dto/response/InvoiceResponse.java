@@ -45,6 +45,13 @@ public class InvoiceResponse {
     private BigDecimal cessPercentage;
     private BigDecimal cessAmount;
     private String ewayBillNumber;
+
+    /** IRP registration results (V49) — provider-generated, read-only for users. */
+    private String irn;
+    private String ackNo;
+    private java.time.LocalDate ackDate;
+    private String einvoiceStatus;
+
     private String paymentTerms;
     private String notes;
     private String status;

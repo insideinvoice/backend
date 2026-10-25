@@ -1,6 +1,8 @@
 package com.insideinvoice.einvoice.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.*;
 
 @Entity
@@ -51,6 +53,7 @@ public class EInvoiceConfig {
     private String lastConnectionError;
 
     /** Eligibility overrides / provider-specific flags (jsonb). */
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     @Builder.Default
     private String settings = "{}";
