@@ -160,7 +160,7 @@ class EInvoiceConfigIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(post("/api/einvoice/config/test").header("Authorization", bearerFor(owner)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.message").value(
-                        org.hamcrest.Matchers.containsString("not activated")));
+                        org.hamcrest.Matchers.containsString("Nothing was sent to the IRP")));
     }
 
     @Test

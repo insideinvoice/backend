@@ -26,6 +26,10 @@ spring:
 app:
   base-url: https://backend-production-1509.up.railway.app
   frontend-base-url: https://insideinvoice.in
+  einvoice:
+    # Production performs REAL government API calls (auth + IRN) using the
+    # client credentials each business stores in Settings.
+    live-calls: true
 
 backup:
   enabled: true

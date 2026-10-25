@@ -30,6 +30,12 @@ public class SealConfig {
      */
     private Boolean allPages;
 
+    /**
+     * Signature image height in pixels on the rendered invoice. Null means
+     * "keep the current value / built-in default (78)".
+     */
+    private Integer signatureSize;
+
     private Variant round;
     private Variant stamp;
 
