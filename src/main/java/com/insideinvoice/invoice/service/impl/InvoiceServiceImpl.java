@@ -51,6 +51,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final InvoiceMapper invoiceMapper;
     private final InvoiceNumberGenerator invoiceNumberGenerator;
     private final PaymentRepository paymentRepository;
+    private final com.insideinvoice.einvoice.service.EInvoiceRegistrationService einvoiceRegistrationService;
     private final ShippingLabelRepository shippingLabelRepository;
     private final HazmatLabelRepository hazmatLabelRepository;
 
@@ -110,6 +111,10 @@ public class InvoiceServiceImpl implements InvoiceService {
             invoice.setTaxMode(TaxMode.defaultForSave(supplierState, request.getPlaceOfSupply()));
         }
         invoice = invoiceRepository.save(invoice);
+
+        // V45/V49: businesses that enabled e-invoicing with auto-register get
+        // the IRN fetched immediately — best-effort, never blocks the invoice.
+        einvoiceRegistrationService.autoRegisterIfConfigured(businessId, invoice.getId());
 
         log.info("Invoice created: {} for businessId: {}", invoice.getInvoiceNumber(), businessId);
         return invoiceMapper.toResponse(invoice, customer.getName(), customer.getPhone());

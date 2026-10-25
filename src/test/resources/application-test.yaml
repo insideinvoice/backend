@@ -24,6 +24,9 @@ backup:
   enabled: false
 
 app:
+  einvoice:
+    # CI never calls the government portal.
+    live-calls: false
   public:
     rate-limit:
       # Generous by default so sharing/authorization tests never trip the limiter.

@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
@@ -57,6 +58,31 @@ public class EInvoiceRegistrationService {
     private final InvoiceRepository invoiceRepository;
     private final CustomerRepository customerRepository;
 
+    /**
+     * Auto-registration hook for invoice creation: when the business enabled
+     * e-invoicing AND ticked auto-register, a newly created eligible invoice
+     * is submitted immediately. NEVER throws and never blocks invoicing —
+     * a failure lands in the persisted registration + invoice status and the
+     * user retries from the View page.
+     */
+    @Transactional
+    public void autoRegisterIfConfigured(Long businessId, Long invoiceId) {
+        try {
+            EInvoiceConfig config = configRepository
+                    .findFirstByBusinessIdOrderByUpdatedAtDesc(businessId)
+                    .filter(c -> Boolean.TRUE.equals(c.getEnabled()) && Boolean.TRUE.equals(c.getAutoRegister()))
+                    .orElse(null);
+            if (config == null) return;
+            // Self-invocation on purpose: doRegister runs in the caller's
+            // transaction with NO new @Transactional boundary, so any failure
+            // caught here can never mark the invoice create rollback-only.
+            doRegister(config.getUpdatedBy() != null ? config.getUpdatedBy() : null, businessId, invoiceId);
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(EInvoiceRegistrationService.class)
+                    .warn("Auto e-invoice registration failed for invoice {}", invoiceId, e);
+        }
+    }
+
     /** Computed status the View page renders for one invoice. */
     @Transactional(readOnly = true)
     public EInvoiceStatusResponse getStatus(Long businessId, Long invoiceId) {
@@ -86,6 +112,10 @@ public class EInvoiceRegistrationService {
 
     @Transactional
     public EInvoiceStatusResponse register(Long userId, Long businessId, Long invoiceId) {
+        return doRegister(userId, businessId, invoiceId);
+    }
+
+    private EInvoiceStatusResponse doRegister(Long userId, Long businessId, Long invoiceId) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .filter(i -> i.getBusinessId().equals(businessId))
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice not found"));

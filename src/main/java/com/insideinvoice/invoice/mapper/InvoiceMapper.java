@@ -52,7 +52,7 @@ public class InvoiceMapper {
 
         List<InvoiceItem> items = request.getItems().stream()
                 .map(itemRequest -> toInvoiceItem(itemRequest, invoice))
-                .toList();
+                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
 
         invoice.setItems(items);
         calculateInvoiceTotals(invoice);

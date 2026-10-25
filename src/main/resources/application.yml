@@ -76,6 +76,11 @@ app:
   # Canonical frontend origin — fallback for share links built by the server
   # (public invoice emails). The frontend passes its own origin when it can.
   frontend-base-url: https://insideinvoice.in
+  einvoice:
+    # Real government IRP calls (auth + IRN). The seller's IRIS client
+    # credentials from Settings are all that is additionally needed. The
+    # test profile switches this off so CI never touches the portal.
+    live-calls: true
   # NOTE: keys live under app.mail.* — EmailService reads ${app.mail.*}.
   # The resend-api-key value is base64-encoded (decoded before use).
   mail:
