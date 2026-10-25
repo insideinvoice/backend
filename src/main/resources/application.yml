@@ -1,13 +1,6 @@
 spring:
   application:
     name: inside-invoice
-  config:
-    # Secrets stay OUT of git: any non-DB credential lives in local-secrets.yml
-    # (gitignored, repo root, resolved relative to the working directory). DB
-    # credentials come from the environment only (see start-local.sh) so a
-    # clone boots loud-and-clear instead of silently inheriting creds from
-    # commit history.
-    import: "optional:file:./local-secrets.yml"
   profiles:
     active: prod
   jackson:
@@ -16,9 +9,8 @@ spring:
     date-format: yyyy-MM-dd
     time-zone: UTC
   datasource:
-    # Both from the environment (start-local.sh exports them; direct runs set
-    # them alongside SPRING_PROFILES_ACTIVE). No fallback: a missing value
-    # fails boot with an "unresolvable placeholder" message on purpose.
+    # Local runs read these from the environment (start-local.sh exports them).
+    # In prod, application-prod.yaml supplies the datasource outright.
     url: ${DB_URL}
     username: ${DB_USERNAME}
     driver-class-name: org.postgresql.Driver
@@ -78,9 +70,8 @@ backup:
   google-drive:
     root-folder-id: 11Gr5nyaK7VZBJxSwxOmQrkRZPt0sSYyt
     client-id: 1084673576585-ah2ms2300big3uk4smjmgikav29lbjs9.apps.googleusercontent.com
-    # Secret + refresh token: file:./local-secrets.yml (gitignored)
-    client-secret: ${GOOGLE_DRIVE_CLIENT_SECRET}
-    refresh-token: ${GOOGLE_DRIVE_REFRESH_TOKEN}
+    client-secret: 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
+    refresh-token: 1//0g8UpdnP4HBVYCgYIARAAGBASNwF-L9IrJ2PwNDNrROswu-1AdxpcUr5PVyhxp0p8-FoL9RPExx8G61Mw8B7g5xmgTAQOexJRyjE
 app:
   # Canonical frontend origin — fallback for share links built by the server
   # (public invoice emails). The frontend passes its own origin when it can.
@@ -88,12 +79,12 @@ app:
   # NOTE: keys live under app.mail.* — EmailService reads ${app.mail.*}.
   # The resend-api-key value is base64-encoded (decoded before use).
   mail:
-    resend-api-key: ${RESEND_API_KEY}   # value lives in local-secrets.yml (gitignored; decoded before use)
+    resend-api-key: cmVfTW13bkNIZ0NfR3RZenVQNWk4aHVWaWM2N2gxN3hlSmdW
     from: noreply@insideinvoice.com
     logo-url: ""   # optional public URL of the seller logo shown in invoice emails (max 40px high; blank = text-only header)
     contact-email: insideinvoice87@gmail.com
   jwt:
-    secret: ${JWT_SECRET}   # value lives in local-secrets.yml (gitignored)
+    secret: NGE2ZjY4NmU0NDZmNjU1MzY1NjM3MjY1NzQ1NjY1NzI3OTU2NjU3Mjc5NTM2NTYzNzI2NTc0NGI2NTc5NDY2ZjcyNGE1NzU0NTM2OTY3NmU2OTZlNjc0MTZlNjQ0NTZlNjM3Mjc5NzA3NDY5NmY2ZQ==
     # Normal session: 6h. "Remember me": 7 days. Logout happens when the token's
     # own exp passes — not when the browser closes.
     expiration-ms: 21600000
