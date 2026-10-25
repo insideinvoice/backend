@@ -139,7 +139,7 @@ public class IrisIrpProvider implements EInvoiceProvider {
                         false,
                         data.path("Irn").asText(null),
                         data.has("AckNo") ? String.valueOf(data.path("AckNo").asLong()) : null,
-                        data.has("AckDt") ? LocalDate.parse(data.path("AckDt").asText()) : null,
+                        data.has("AckDt") ? LocalDate.parse(data.path("AckDt").asText()).atStartOfDay() : null,
                         data.path("SignedQRCode").asText(null),
                         null,
                         null,
@@ -209,7 +209,8 @@ public class IrisIrpProvider implements EInvoiceProvider {
         double assVal = 0, cgst = 0, sgst = 0, igst = 0, totInv = 0;
         boolean igstMode = "IGST".equalsIgnoreCase(String.valueOf(payload.getOrDefault("taxMode", "")));
         for (Object o : (Iterable<?>) payload.getOrDefault("items", java.util.List.of())) {
-            Map<?, ?> item = (Map<?, ?>) o;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> item = (Map<String, Object>) o;
             ObjectNode n = items.addObject();
             n.put("SlNo", String.valueOf(i++));
             n.put("PrdDesc", String.valueOf(item.getOrDefault("description", "")));

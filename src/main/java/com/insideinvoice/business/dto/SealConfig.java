@@ -39,6 +39,14 @@ public class SealConfig {
     private Variant round;
     private Variant stamp;
 
+    /**
+     * Free-form signature placement (V50). Kept as a raw node so the three
+     * cases are distinguishable: field ABSENT (seal-only save) = keep the
+     * stored placement; explicit null or empty object = REMOVE the placement
+     * (back to inline rendering); an object = upsert the placement.
+     */
+    private com.fasterxml.jackson.databind.JsonNode signature;
+
     @Getter
     @Setter
     @NoArgsConstructor

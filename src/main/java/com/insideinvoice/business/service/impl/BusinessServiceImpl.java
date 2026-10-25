@@ -258,17 +258,51 @@ public class BusinessServiceImpl implements BusinessService {
                 .allPages(pickBoolean(incoming.getAllPages(), base.getAllPages(), false))
                 // Signature size rides the same config: null = keep the stored
                 // value (the built-in default is 78px).
-                .signatureSize(incoming.getSignatureSize() != null
-                        ? Math.max(48, Math.min(120, incoming.getSignatureSize()))
-                        : base.getSignatureSize())
+                .signatureSize((int) pick(
+                        incoming.getSignatureSize() == null ? null : incoming.getSignatureSize().doubleValue(),
+                        base.getSignatureSize() == null ? null : base.getSignatureSize().doubleValue(),
+                        78.0))
                 .round(mergeVariant(base.getRound(), incoming.getRound(), true))
                 .stamp(mergeVariant(base.getStamp(), incoming.getStamp(), false))
+                .signature(mergeSignature(base.getSignature(), incoming.getSignature()))
                 .build();
         try {
             return objectMapper.writeValueAsString(merged);
         } catch (JsonProcessingException e) {
             throw new BadRequestException("Invalid seal configuration.");
         }
+    }
+
+    /**
+     * Signature placement merge over the raw JSON node:
+     *   absent field        -> keep the stored placement (seal-only saves
+     *                          never disturb it);
+     *   explicit null/empty -> REMOVE (back to inline rendering);
+     *   object              -> upsert, clamped to the sheet.
+     */
+    private com.fasterxml.jackson.databind.JsonNode mergeSignature(
+            com.fasterxml.jackson.databind.JsonNode currentJson,
+            com.fasterxml.jackson.databind.JsonNode incoming) {
+        SealConfig.Variant current = currentJson == null || currentJson.isNull()
+                ? null
+                : objectMapper.convertValue(currentJson, SealConfig.Variant.class);
+        if (incoming == null || incoming.isMissingNode()) {
+            return currentJson;
+        }
+        if (incoming.isNull() || (incoming.isObject() && incoming.isEmpty())) {
+            return null;
+        }
+        SealConfig.Variant src = objectMapper.convertValue(incoming, SealConfig.Variant.class);
+        double size = pick(src.getSizeMm(), current == null ? null : current.getSizeMm(), 38.0);
+        double tilt = pick(src.getTilt(), current == null ? null : current.getTilt(), 0.0);
+        double right = pick(src.getRightMm(), current == null ? null : current.getRightMm(), 16.0);
+        double bottom = pick(src.getBottomMm(), current == null ? null : current.getBottomMm(), 10.0);
+        return objectMapper.valueToTree(SealConfig.Variant.builder()
+                .sizeMm(roundTo2(clamp(size, 10, 140)))
+                .tilt(roundTo2(clamp(tilt, -45, 45)))
+                .rightMm(roundTo2(clamp(right, -10, 210)))
+                .bottomMm(roundTo2(clamp(bottom, -10, 297)))
+                .build());
     }
 
     private SealConfig readSealConfig(String json) {
