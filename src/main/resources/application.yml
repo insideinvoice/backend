@@ -77,9 +77,10 @@ app:
   # (public invoice emails). The frontend passes its own origin when it can.
   frontend-base-url: https://insideinvoice.in
   einvoice:
-    # Real government IRP calls (auth + IRN). The seller's IRIS client
-    # credentials from Settings are all that is additionally needed. The
-    # test profile switches this off so CI never touches the portal.
+    # Gates ONLY the automated connection test (Settings → Test connection),
+    # so CI can never authenticate against the government portal. IRN
+    # registration is the seller's explicit action and always connects
+    # directly with the credentials stored in Settings.
     live-calls: true
   # NOTE: keys live under app.mail.* — EmailService reads ${app.mail.*}.
   # The resend-api-key value is base64-encoded (decoded before use).

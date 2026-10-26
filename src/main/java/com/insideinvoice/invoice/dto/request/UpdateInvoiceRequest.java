@@ -139,6 +139,14 @@ public class UpdateInvoiceRequest implements InvoiceExtendedFields {
      */
     private com.insideinvoice.invoice.entity.DiscountType discountType;
 
+    /**
+     * Per-invoice seal (V51): ROUND / STAMP / NONE. Optional on update —
+     * absent means "keep the stored selection", so legacy clients never wipe
+     * it. Invalid values are rejected.
+     */
+    @Size(max = 20, message = "Seal type must not exceed 20 characters")
+    private String sealType;
+
     @Valid
     @NotEmpty(message = "At least one invoice item is required")
     private List<InvoiceItemRequest> items;

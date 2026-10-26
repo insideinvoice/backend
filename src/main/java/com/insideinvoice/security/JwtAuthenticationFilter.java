@@ -1,5 +1,7 @@
 package com.insideinvoice.security;
 
+import com.insideinvoice.auth.entity.PersonalAccessToken;
+import com.insideinvoice.auth.service.PersonalAccessTokenService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -24,9 +26,11 @@ import java.io.IOException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+    private static final String PAT_PREFIX = "pat_";
 
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailsService customUserDetailsService;
+    private final PersonalAccessTokenService personalAccessTokenService;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -40,27 +44,72 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         try {
-            String jwt = extractValidJwt(request);
+            String bearer = extractBearer(request);
 
-            if (StringUtils.hasText(jwt)) {
-                Long userId = jwtTokenProvider.getUserIdFromToken(jwt);
-                UserDetails userDetails = customUserDetailsService.loadUserById(userId);
+            if (StringUtils.hasText(bearer) && bearer.startsWith(PAT_PREFIX)) {
+                // Personal Access Token: authenticate as the owning user. The
+                // resolve also RECORDS the hit (count + who called), so pass the
+                // calling client's address and User-Agent along (V52).
+                personalAccessTokenService.resolve(bearer, clientIp(request), userAgent(request)).ifPresent(pat -> {
+                    try {
+                        UserDetails userDetails = customUserDetailsService.loadUserById(pat.getUserId());
+                        UsernamePasswordAuthenticationToken authentication =
+                                new UsernamePasswordAuthenticationToken(
+                                        userDetails, null, userDetails.getAuthorities());
+                        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    } catch (Exception e) {
+                        log.warn("Could not authenticate PAT for user {}", pat.getUserId(), e);
+                    }
+                });
+            } else if (StringUtils.hasText(bearer)) {
+                String jwt = bearer;
+                if (jwtTokenProvider.validateToken(jwt)) {
+                    Long userId = jwtTokenProvider.getUserIdFromToken(jwt);
+                    UserDetails userDetails = customUserDetailsService.loadUserById(userId);
 
-                // Session was revoked (logout bumps token_version): treat as anonymous
-                // rather than authenticating with a token the user has already ended.
-                if (userDetails instanceof UserPrincipal principal
-                        && principal.getTokenVersion() != jwtTokenProvider.getTokenVersion(jwt)) {
-                    log.warn("Rejected revoked JWT for user {}", userId);
-                    filterChain.doFilter(request, response);
-                    return;
+                    // Session was revoked (logout bumps token_version): treat as anonymous
+                    // rather than authenticating with a token the user has already ended.
+                    if (userDetails instanceof UserPrincipal principal
+                            && principal.getTokenVersion() != jwtTokenProvider.getTokenVersion(jwt)) {
+                        log.warn("Rejected revoked JWT for user {}", userId);
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
+
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails, null, userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                } else {
+                    // Try cookie fallback
+                    Cookie[] cookies = request.getCookies();
+                    if (cookies != null) {
+                        for (Cookie cookie : cookies) {
+                            if ("jwt".equals(cookie.getName())) {
+                                String token = cookie.getValue();
+                                if (jwtTokenProvider.validateToken(token)) {
+                                    Long userId = jwtTokenProvider.getUserIdFromToken(token);
+                                    UserDetails userDetails = customUserDetailsService.loadUserById(userId);
+                                    if (userDetails instanceof UserPrincipal principal
+                                            && principal.getTokenVersion() != jwtTokenProvider.getTokenVersion(token)) {
+                                        log.warn("Rejected revoked JWT (cookie) for user {}", userId);
+                                        filterChain.doFilter(request, response);
+                                        return;
+                                    }
+                                    UsernamePasswordAuthenticationToken authentication =
+                                            new UsernamePasswordAuthenticationToken(
+                                                    userDetails, null, userDetails.getAuthorities());
+                                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
-
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails, null, userDetails.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         } catch (Exception e) {
             log.error("Could not set user authentication in security context", e);
@@ -69,29 +118,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private String extractValidJwt(HttpServletRequest request) {
+    private String extractBearer(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
-            String token = bearerToken.substring(7);
-            if (jwtTokenProvider.validateToken(token)) {
-                return token;
-            }
-            log.warn("Authorization header token invalid, trying cookie");
+            return bearerToken.substring(7);
         }
-
-        Cookie[] cookies = request.getCookies();
-        if (cookies != null) {
-            for (Cookie cookie : cookies) {
-                if ("jwt".equals(cookie.getName())) {
-                    String token = cookie.getValue();
-                    if (jwtTokenProvider.validateToken(token)) {
-                        return token;
-                    }
-                    log.warn("Cookie JWT also invalid for {}", request.getRequestURI());
-                }
-            }
-        }
-
         return null;
+    }
+
+    /**
+     * Calling client's address for the PAT usage record: the first hop of
+     * X-Forwarded-For when the app sits behind the platform proxy (Railway /
+     * nginx append the client address there), the socket address otherwise.
+     */
+    private static String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (StringUtils.hasText(forwarded)) {
+            int comma = forwarded.indexOf(',');
+            return (comma > 0 ? forwarded.substring(0, comma) : forwarded).trim();
+        }
+        return request.getRemoteAddr();
+    }
+
+    /** User-Agent of the calling client — "which integration" for the PAT screen. */
+    private static String userAgent(HttpServletRequest request) {
+        String ua = request.getHeader("User-Agent");
+        return ua == null ? null : ua.trim();
     }
 }

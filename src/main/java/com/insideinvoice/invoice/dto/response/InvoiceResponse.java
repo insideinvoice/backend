@@ -89,6 +89,8 @@ public class InvoiceResponse {
      * (legacy rows — renderers fall back to the place-of-supply heuristic).
      */
     private String taxMode;
+    /** Per-invoice seal (ROUND / STAMP / NONE); null = the business's default. */
+    private String sealType;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<InvoiceItemResponse> items;

@@ -2,6 +2,7 @@ package com.insideinvoice.invoice.share;
 
 import com.insideinvoice.business.entity.Business;
 import com.insideinvoice.customer.entity.Customer;
+import com.insideinvoice.invoice.entity.DiscountType;
 import com.insideinvoice.invoice.entity.Invoice;
 import com.insideinvoice.invoice.entity.InvoiceItem;
 import com.insideinvoice.invoice.entity.InvoiceType;
@@ -352,8 +353,11 @@ public final class InvoiceEmailTemplate {
             html.append(totalRow("Subtotal", "\u20b9" + inr(subtotal), false, "#374151"));
         }
         if (discount.signum() > 0) {
-            BigDecimal pct = nvl(invoice.getDiscountPercent()).stripTrailingZeros();
-            String label = "Discount (" + pct.toPlainString() + "% off)";
+            // INDIVIDUAL stores no invoice-level % (it is forced to 0) — the
+            // label says "per item" instead of printing a phantom "0% off".
+            String label = invoice.getDiscountType() == DiscountType.INDIVIDUAL
+                    ? "Discount (per item)"
+                    : "Discount (" + nvl(invoice.getDiscountPercent()).stripTrailingZeros().toPlainString() + "% off)";
             html.append(totalRow(label, "-\u20b9" + inr(discount), false, DISCOUNT_GREEN));
         }
         html.append(totalRow("Taxable value", "\u20b9" + inr(taxable), false, "#374151"));
@@ -554,8 +558,12 @@ public final class InvoiceEmailTemplate {
               .append(inr(subtotal)).append("\n");
         }
         if (discount.signum() > 0) {
-            sb.append("Discount (").append(nvl(invoice.getDiscountPercent()).stripTrailingZeros().toPlainString())
-              .append("% off): -Rs.").append(inr(discount)).append("\n");
+            if (invoice.getDiscountType() == DiscountType.INDIVIDUAL) {
+                sb.append("Discount (per item): -Rs.").append(inr(discount)).append("\n");
+            } else {
+                sb.append("Discount (").append(nvl(invoice.getDiscountPercent()).stripTrailingZeros().toPlainString())
+                  .append("% off): -Rs.").append(inr(discount)).append("\n");
+            }
         }
         sb.append("Taxable value: Rs.").append(inr(taxable)).append("\n");
         String gstKind = gstKind(invoice, business);

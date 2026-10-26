@@ -44,6 +44,7 @@ public class InvoiceMapper {
                 .paymentMode(request.getPaymentMode())
                 .discountPercent(normalizeInvoiceDiscount(request.getDiscountType(), request.getDiscountPercent()))
                 .discountType(request.getDiscountType())
+                .sealType(request.getSealType())
                 .billingMode(BillingMode.fromRaw(request.getBillingMode()))
                 .createdBy(userId)
                 .build();
@@ -320,6 +321,7 @@ public class InvoiceMapper {
                 .discountPercent(invoice.getDiscountPercent())
                 .billingMode(invoice.getBillingMode() == null ? null : invoice.getBillingMode().name())
                 .taxMode(invoice.getTaxMode() == null ? null : invoice.getTaxMode().name())
+                .sealType(invoice.getSealType())
                 .createdBy(invoice.getCreatedBy())
                 .createdAt(invoice.getCreatedAt())
                 .updatedAt(invoice.getUpdatedAt())

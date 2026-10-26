@@ -5,6 +5,7 @@ import com.insideinvoice.business.entity.Business;
 import com.insideinvoice.business.repository.BusinessRepository;
 import com.insideinvoice.customer.entity.Customer;
 import com.insideinvoice.customer.repository.CustomerRepository;
+import com.insideinvoice.customer.service.CustomerService;
 import com.insideinvoice.exception.BadRequestException;
 import com.insideinvoice.exception.ResourceNotFoundException;
 import com.insideinvoice.invoice.dto.request.CreateInvoiceRequest;
@@ -47,6 +48,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final InvoiceItemRepository invoiceItemRepository;
     private final CustomerRepository customerRepository;
+    private final CustomerService customerService;
     private final BusinessRepository businessRepository;
     private final InvoiceMapper invoiceMapper;
     private final InvoiceNumberGenerator invoiceNumberGenerator;
@@ -58,8 +60,52 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional
     public InvoiceResponse createInvoice(CreateInvoiceRequest request, Long businessId, Long userId) {
-        Customer customer = customerRepository.findByIdAndBusinessId(request.getCustomerId(), businessId)
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
+        String customerName;
+        String customerPhone;
+        Long resolvedCustomerId;
+        if (request.getCustomerId() != null) {
+            Customer existing = customerRepository.findByIdAndBusinessId(request.getCustomerId(), businessId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
+            resolvedCustomerId = existing.getId();
+            customerName = existing.getName();
+            customerPhone = existing.getPhone();
+        } else if (request.getCustomer() != null) {
+            // Create (or reuse) the customer on the fly, scoped to this business.
+            //
+            // IMPORTANT: the adopt check runs against the repository FIRST,
+            // before any create is attempted. A nested service call that throws
+            // (even one we catch here) marks the shared invoice transaction
+            // rollback-only, which surfaced at commit as
+            // UnexpectedRollbackException (500) — the whole reason the
+            // "existing customer passed again" case failed before (V51).
+            var dto = request.getCustomer();
+            Customer adopted = null;
+            if (dto.getPhone() != null && !dto.getPhone().isBlank()) {
+                adopted = customerRepository.findByPhoneAndBusinessId(dto.getPhone().trim(), businessId).orElse(null);
+            }
+            if (adopted == null && dto.getEmail() != null && !dto.getEmail().isBlank()) {
+                adopted = customerRepository.findByEmailIgnoreCaseAndBusinessId(dto.getEmail().trim(), businessId).orElse(null);
+            }
+            if (adopted != null) {
+                resolvedCustomerId = adopted.getId();
+                customerName = adopted.getName();
+                customerPhone = adopted.getPhone();
+            } else {
+                // Genuinely new customer — create them in the same business.
+                com.insideinvoice.customer.dto.response.CustomerResponse created =
+                        customerService.createCustomer(dto, businessId);
+                resolvedCustomerId = created.getId();
+                customerName = created.getName();
+                customerPhone = created.getPhone();
+            }
+        } else {
+            throw new BadRequestException("Either customerId or customer must be provided");
+        }
+        // Ensure the invoice carries the resolved customer id.
+        request.setCustomerId(resolvedCustomerId);
+        // V51: an optional per-invoice seal (ROUND/STAMP/NONE) is validated and
+        // normalised here so the mapper stores a canonical value.
+        request.setSealType(normalizeSealType(request.getSealType()));
 
         validateExtendedDates(request);
 
@@ -117,7 +163,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         einvoiceRegistrationService.autoRegisterIfConfigured(businessId, invoice.getId());
 
         log.info("Invoice created: {} for businessId: {}", invoice.getInvoiceNumber(), businessId);
-        return invoiceMapper.toResponse(invoice, customer.getName(), customer.getPhone());
+        return invoiceMapper.toResponse(invoice, customerName, customerPhone);
     }
 
     @Override
@@ -250,6 +296,12 @@ public class InvoiceServiceImpl implements InvoiceService {
         if (requestedTaxMode != null) {
             invoice.setTaxMode(requestedTaxMode);
         }
+        // Per-invoice seal (V51): present -> validated and stored; absent ->
+        // keep the stored selection (same absent = keep contract as taxMode).
+        String requestedSealType = normalizeSealType(request.getSealType());
+        if (requestedSealType != null) {
+            invoice.setSealType(requestedSealType);
+        }
         invoice.setBillingMode(BillingMode.fromRaw(request.getBillingMode()));
         invoice.setDiscountType(request.getDiscountType());
         invoice.setDiscountPercent(InvoiceMapper.normalizeInvoiceDiscount(request.getDiscountType(), request.getDiscountPercent()));
@@ -320,6 +372,12 @@ public class InvoiceServiceImpl implements InvoiceService {
         if (requestedTaxMode != null) {
             invoice.setTaxMode(requestedTaxMode);
         }
+        // Per-invoice seal (V51): present -> validated and stored; absent ->
+        // keep the stored selection (same absent = keep contract as taxMode).
+        String requestedSealType = normalizeSealType(request.getSealType());
+        if (requestedSealType != null) {
+            invoice.setSealType(requestedSealType);
+        }
         invoice.setBillingMode(BillingMode.fromRaw(request.getBillingMode()));
         invoice.setDiscountType(request.getDiscountType());
         invoice.setDiscountPercent(InvoiceMapper.normalizeInvoiceDiscount(request.getDiscountType(), request.getDiscountPercent()));
@@ -385,6 +443,21 @@ public class InvoiceServiceImpl implements InvoiceService {
      * audit guard). When a number IS provided it is validated for length and
      * uniqueness; races still surface as 409 via DataIntegrityViolationException.
      */
+    /**
+     * V51: validate + canonicalise the optional per-invoice seal choice. Blank
+     * means "not set" (the document then follows the business's Settings seal).
+     * Accepted values are case-insensitive and stored upper-case: ROUND (the
+     * round company seal), STAMP (the rubber stamp) or NONE (no mark at all).
+     */
+    private static String normalizeSealType(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        String value = raw.trim().toUpperCase();
+        if (!value.equals("ROUND") && !value.equals("STAMP") && !value.equals("NONE")) {
+            throw new BadRequestException("sealType must be one of ROUND, STAMP or NONE");
+        }
+        return value;
+    }
+
     private void applyInvoiceNumber(Invoice invoice, String requested, Long businessId) {
         if (requested == null || requested.isBlank()) {
             if (invoice.getInvoiceNumber() == null || invoice.getInvoiceNumber().isBlank()) {

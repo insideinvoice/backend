@@ -77,6 +77,14 @@ public class Invoice extends BaseEntity {
     @Column(name = "discount_type")
     private DiscountType discountType;
 
+    /**
+     * Per-invoice seal choice (V51): ROUND / STAMP / NONE. NULL = follow the
+     * business's Settings seal (the default). Lets an API/PAT caller pin a
+     * different mark — or no mark at all — on a single invoice.
+     */
+    @Column(name = "seal_type", length = 20)
+    private String sealType;
+
     @Column(name = "payment_terms")
     private String paymentTerms;
 

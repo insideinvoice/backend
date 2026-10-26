@@ -36,10 +36,13 @@ import java.util.Map;
  * user supplies ONLY the IRIS client id + client secret in Settings.
  *
  * Honesty rules: every response is the IRP's actual answer — errors surface
- * verbatim, successes only when the IRP really returned an IRN. Live calls
- * are gated by app.einvoice.live-calls (true in production config, off in
- * dev/tests) so a misconfigured deployment can never silently "test" against
- * the government portal.
+ * verbatim, successes only when the IRP really returned an IRN.
+ *
+ * Live-call gating: only the AUTOMATED connection test consults
+ * app.einvoice.live-calls, so CI can never authenticate against the
+ * government portal. Registration is the seller's explicit "Register for
+ * IRN" action on one specific invoice and connects directly to the
+ * configured environment — no test step, no silent block.
  */
 @Component
 public class IrisIrpProvider implements EInvoiceProvider {
@@ -55,7 +58,8 @@ public class IrisIrpProvider implements EInvoiceProvider {
             .connectTimeout(TIMEOUT)
             .build();
 
-    /** Operator gate: real government calls happen only when explicitly enabled. */
+    /** Operator gate for the automated connection TEST only. Registration
+     *  (generateIrn) never consults it — see the class javadoc. */
     @Value("${app.einvoice.live-calls:true}")
     private boolean liveCalls;
 
@@ -100,11 +104,6 @@ public class IrisIrpProvider implements EInvoiceProvider {
     @Override
     public IrnResult generateIrn(EInvoiceEnvironment environment, Map<String, String> credentials,
                                  Map<String, Object> payload) {
-        if (!liveCalls) {
-            return IrnResult.failure("IRP_LIVE_CALLS_DISABLED",
-                    "Live IRP calls are switched off on this deployment (app.einvoice.live-calls=false) — "
-                            + "the invoice was NOT sent to the government portal and no IRN was issued.");
-        }
         try {
             JsonNode auth = authenticate(environment, credentials);
             if (auth.path("Status").asInt(-1) != 1) {

@@ -39,6 +39,8 @@ public class InvoiceEmailService {
     private final BusinessRepository businessRepository;
     private final InvoiceShareService invoiceShareService;
     private final EmailService emailService;
+    private final HeadlessInvoicePdfService headlessInvoicePdfService;
+    private final PublicInvoicePdfService publicInvoicePdfService;
 
     @Value("${app.frontend-base-url:https://insideinvoice.in}")
     private String defaultFrontendBaseUrl;
@@ -82,18 +84,44 @@ public class InvoiceEmailService {
                 InvoiceEmailTemplate.build(invoice, customer, business, shareUrl);
 
         String fromName = safeName(business.getBusinessName()) + " via Inside Invoice";
-        // At most one part: the client-rendered PDF. The seller logo is never
+        // At most one part: the invoice PDF. The seller logo is never
         // embedded — the email header is text-only, so nothing in the message
         // can arrive broken or be stripped by a mail client.
+
+        // V52: the attachment must be the EXACT template the user picked in the
+        // UI, pixel for pixel. Headless Chromium prints the public share page
+        // (the customer-facing React document built from the same payload), so
+        // API/PAT callers — who have no browser of their own — get the real
+        // template, not a re-interpretation of it. The generic PDFBox renderer
+        // is strictly a last resort when no engine exists on the host.
+        byte[] effectivePdf = pdfAttachment;
+        String rendererKind = "client";
+        if (effectivePdf == null || effectivePdf.length == 0) {
+            byte[] exact = headlessInvoicePdfService.render(share.getToken(), invoice.getInvoiceNumber());
+            if (exact != null) {
+                effectivePdf = exact;
+                rendererKind = "template-exact";
+            } else {
+                try {
+                    effectivePdf = publicInvoicePdfService.render(
+                            new ResolvedPublicInvoice(invoice, business, customer));
+                    rendererKind = "generic";
+                } catch (Exception e) {
+                    log.warn("Server-side PDF render failed for invoice {}; sending email without attachment",
+                            invoice.getInvoiceNumber(), e);
+                }
+            }
+        }
+
         java.util.List<com.insideinvoice.email.EmailAttachment> parts = new java.util.ArrayList<>();
-        com.insideinvoice.email.EmailAttachment pdf = toPdfAttachment(pdfAttachment, pdfFilename, invoice.getInvoiceNumber());
+        com.insideinvoice.email.EmailAttachment pdf = toPdfAttachment(effectivePdf, pdfFilename, invoice.getInvoiceNumber());
         if (pdf != null) parts.add(pdf);
         emailService.sendHtmlEmail(fromName, customer.getEmail().trim(),
                 content.subject(), content.html(), content.text(),
                 notBlank(business.getEmail()) ? business.getEmail().trim() : null, parts);
 
-        log.info("Invoice email sent | invoice: {} | to: {} | parts: {}",
-                invoice.getInvoiceNumber(), customer.getEmail(), pdf != null ? "pdf" : "-");
+        log.info("Invoice email sent | invoice: {} | to: {} | parts: {} | renderer: {}",
+                invoice.getInvoiceNumber(), customer.getEmail(), pdf != null ? "pdf" : "-", rendererKind);
         return customer.getEmail().trim();
     }
 

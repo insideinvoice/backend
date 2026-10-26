@@ -22,8 +22,17 @@ import java.math.BigDecimal;
 @Builder
 public class CreateInvoiceRequest implements InvoiceExtendedFields {
 
-    @NotNull(message = "Customer ID is required")
+    // Either an existing customer id OR a `customer` object (new customer) must
+    // be provided. Validated in InvoiceServiceImpl.
     private Long customerId;
+
+    /**
+     * Optional: create a new customer on the fly (or reuse an existing one
+     * matched by phone/email within the same business). When customerId is
+     * null this object is required.
+     */
+    @jakarta.validation.Valid
+    private com.insideinvoice.customer.dto.request.CreateCustomerRequest customer;
 
     @NotBlank(message = "Invoice type is required")
     private String invoiceType;
@@ -134,6 +143,14 @@ public class CreateInvoiceRequest implements InvoiceExtendedFields {
      * configured — every legacy client and row.
      */
     private com.insideinvoice.invoice.entity.DiscountType discountType;
+
+    /**
+     * Optional per-invoice seal: ROUND (the business's round company seal),
+     * STAMP (the rubber stamp) or NONE (no mark on this invoice). Absent/null
+     * = follow the business's saved Settings choice.
+     */
+    @Size(max = 20, message = "Seal type must not exceed 20 characters")
+    private String sealType;
 
     @Valid
     @NotEmpty(message = "At least one invoice item is required")

@@ -2,6 +2,7 @@ package com.insideinvoice.einvoice.entity;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 import lombok.*;
 
@@ -61,7 +62,16 @@ public class EInvoiceConfig {
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private java.time.LocalDateTime createdAt;
 
+    /**
+     * Last WRITE, not last insert. The column default only stamps creation
+     * time, so without this annotation an updated row kept its INSERT
+     * timestamp — and every "which config is the active one?" lookup
+     * (ORDER BY updated_at DESC) kept returning the row that was merely
+     * created last. Symptom: switching the provider to Mock saved fine but
+     * the test/status/register calls still used the older IRIS row.
+     */
     @Column(name = "updated_at", insertable = false)
+    @UpdateTimestamp
     private java.time.LocalDateTime updatedAt;
 
     @Column(name = "created_by")

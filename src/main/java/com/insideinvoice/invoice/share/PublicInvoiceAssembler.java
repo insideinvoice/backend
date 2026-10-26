@@ -38,6 +38,20 @@ public class PublicInvoiceAssembler {
 
         String invoiceTypeName = effectiveTypeName(invoice, typeOverride);
 
+        // V51: a per-invoice seal (ROUND/STAMP/NONE) overrides the business's
+        // Settings choice only for this document — the public share page and
+        // the emailed PDF then render exactly what the caller pinned.
+        PublicInvoiceResponse.Seller seller = seller(business);
+        if (seller != null && invoice.getSealType() != null) {
+            String seal = invoice.getSealType().trim().toUpperCase();
+            if (seal.equals("NONE")) {
+                seller.setSealEnabled(false);
+            } else if (seal.equals("ROUND") || seal.equals("STAMP")) {
+                seller.setSealEnabled(true);
+                seller.setSealType(seal.toLowerCase());
+            }
+        }
+
         return PublicInvoiceResponse.builder()
                 .invoiceNumber(invoice.getInvoiceNumber())
                 .invoiceType(invoiceTypeName)
@@ -81,7 +95,7 @@ public class PublicInvoiceAssembler {
                 .serviceDate(invoice.getServiceDate())
                 .treatmentReference(invoice.getTreatmentReference())
                 .referringDoctor(invoice.getReferringDoctor())
-                .seller(seller(business))
+                .seller(seller)
                 .buyer(buyer(customer))
                 .items(items(invoice))
                 .build();

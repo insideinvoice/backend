@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -35,6 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/invoices")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Invoices", description = "Invoice management APIs")
 public class InvoiceController {
 
@@ -47,9 +49,19 @@ public class InvoiceController {
     @Operation(summary = "Create a new invoice")
     public ResponseEntity<ApiResponse<InvoiceResponse>> createInvoice(
             @Valid @RequestBody CreateInvoiceRequest request,
+            @RequestParam(name = "sendEmail", required = false) Boolean sendEmail,
+            @RequestParam(name = "frontendOrigin", required = false) String frontendOrigin,
             @CurrentUser UserPrincipal currentUser) {
         InvoiceResponse response = invoiceService.createInvoice(
                 request, currentUser.getBusinessId(), currentUser.getId());
+        if (Boolean.TRUE.equals(sendEmail)) {
+            try {
+                invoiceEmailService.sendInvoiceEmail(
+                        response.getId(), currentUser.getBusinessId(), frontendOrigin, null, null);
+            } catch (Exception e) {
+                log.warn("Invoice {} created but email delivery failed: {}", response.getInvoiceNumber(), e.getMessage());
+            }
+        }
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Invoice created successfully", response));
     }
