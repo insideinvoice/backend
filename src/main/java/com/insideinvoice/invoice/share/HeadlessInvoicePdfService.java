@@ -98,8 +98,8 @@ public class HeadlessInvoicePdfService {
         try (BrowserContext context = browser.newContext(
                 new Browser.NewContextOptions().setViewportSize(1400, 2000))) {
             Page page = context.newPage();
-            page.goto(frontendBaseUrl + "/i/" + shareToken + "?print=1",
-                    new Page.GotoOptions()
+            page.navigate(frontendBaseUrl + "/i/" + shareToken + "?print=1",
+                    new Page.NavigateOptions()
                             .setTimeout(GOTO_TIMEOUT_MS)
                             .setWaitUntil(WaitUntilState.COMMIT));
             // The share page itself signals when the document is laid out and
