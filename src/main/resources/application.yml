@@ -85,7 +85,7 @@ app:
   # NOTE: keys live under app.mail.* — EmailService reads ${app.mail.*}.
   # The resend-api-key value is base64-encoded (decoded before use).
   mail:
-    resend-api-key: cmVfTW13bkNIZ0NfR3RZenVQNWk4aHVWaWM2N2gxN3hlSmdW
+    resend-api-key: cmVfUGVzVjlxUU1fRFNVNGhzbldFaFltcTVEZEZHb2FjOHVh
     from: noreply@insideinvoice.com
     contact-email: insideinvoice87@gmail.com
   jwt:
