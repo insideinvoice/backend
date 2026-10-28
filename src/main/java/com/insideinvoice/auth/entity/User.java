@@ -67,4 +67,26 @@ public class User extends BaseEntity {
 
     @Column(name = "token_version", nullable = false)
     private int tokenVersion = 0;
+
+    /**
+     * Email ownership proof for self-service sign-ups. False only on accounts
+     * created by {@code POST /api/auth/register} that have not yet entered the
+     * OTP mailed to their inbox — login refuses those. Pre-existing accounts
+     * are backfilled to true by V53.
+     */
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
+    // Own OTP columns (NOT tmp_otp): forgot-password must keep working while an
+    // account is mid-verification, so the flows cannot share a code or an
+    // attempt budget.
+
+    @Column(name = "email_otp")
+    private String emailOtp;
+
+    @Column(name = "email_otp_attempts")
+    private Integer emailOtpAttempts;
+
+    @Column(name = "email_otp_created_at")
+    private java.time.LocalDateTime emailOtpCreatedAt;
 }

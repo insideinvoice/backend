@@ -3,11 +3,15 @@ package com.insideinvoice.auth.controller;
 import com.insideinvoice.auth.dto.request.ChangePasswordRequest;
 import com.insideinvoice.auth.dto.request.ForgotPasswordRequest;
 import com.insideinvoice.auth.dto.request.LoginRequest;
+import com.insideinvoice.auth.dto.request.RegisterRequest;
+import com.insideinvoice.auth.dto.request.ResendVerificationRequest;
 import com.insideinvoice.auth.dto.request.ResetPasswordOtpRequest;
 import com.insideinvoice.auth.dto.request.SignupRequest;
 import com.insideinvoice.auth.dto.request.UpdateProfileRequest;
+import com.insideinvoice.auth.dto.request.VerifyEmailRequest;
 import com.insideinvoice.auth.dto.request.VerifyOtpRequest;
 import com.insideinvoice.auth.dto.response.ApiResponse;
+import com.insideinvoice.auth.dto.response.EmailVerificationPendingResponse;
 import com.insideinvoice.auth.dto.response.JwtResponse;
 import com.insideinvoice.auth.service.AuthService;
 import com.insideinvoice.security.UserPrincipal;
@@ -45,6 +49,31 @@ public class AuthController {
                 .body(ApiResponse.success("User registered successfully", response));
     }
 
+    @PostMapping("/register")
+    @Operation(summary = "Public self-service registration (standard USER account only). "
+            + "Returns an email-verification pending response — no session is issued until "
+            + "the mailed 6-digit code is entered via /verify-email.")
+    public ResponseEntity<ApiResponse<EmailVerificationPendingResponse>> register(
+            @Valid @RequestBody RegisterRequest request) {
+        EmailVerificationPendingResponse response = authService.register(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Account created. Check your inbox for the 6-digit verification code.", response));
+    }
+
+    @PostMapping("/verify-email")
+    @Operation(summary = "Verify a sign-up email with the mailed 6-digit code and receive the session")
+    public ResponseEntity<ApiResponse<JwtResponse>> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        JwtResponse response = authService.verifyEmail(request);
+        return ResponseEntity.ok(ApiResponse.success("Email verified. Welcome aboard!", response));
+    }
+
+    @PostMapping("/resend-verification")
+    @Operation(summary = "Regenerate and re-mail the sign-up verification code")
+    public ResponseEntity<ApiResponse<EmailVerificationPendingResponse>> resendVerification(
+            @Valid @RequestBody ResendVerificationRequest request) {
+        return ResponseEntity.ok(authService.resendVerificationOtp(request));
+    }
+
     @PostMapping("/login")
     @Operation(summary = "Authenticate user and return JWT token")
     public ResponseEntity<ApiResponse<JwtResponse>> login(
@@ -63,9 +92,10 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    @Operation(summary = "Send OTP for password reset")
-    public ResponseEntity<ApiResponse<Void>> sendOtp(@Valid @RequestBody ForgotPasswordRequest request) {
-        ApiResponse<Void> response = authService.sendOtp(request);
+    @Operation(summary = "Send OTP for password reset. Returns a server-driven resend cooldown so the UI counts down the REAL 15-minute per-account window.")
+    public ResponseEntity<ApiResponse<EmailVerificationPendingResponse>> sendOtp(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        ApiResponse<EmailVerificationPendingResponse> response = authService.sendOtp(request);
         return ResponseEntity.ok(response);
     }
 

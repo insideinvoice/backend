@@ -27,6 +27,11 @@ app:
   einvoice:
     # CI never calls the government portal.
     live-calls: false
+  mail:
+    # Blank on purpose: registration now mails a verification code, and the
+    # tests register constantly. EmailService treats a missing key as
+    # "log and skip", so no test run ever spends a credit or hits a real inbox.
+    resend-api-key: ""
   public:
     rate-limit:
       # Generous by default so sharing/authorization tests never trip the limiter.

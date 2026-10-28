@@ -19,7 +19,12 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String login) throws UsernameNotFoundException {
+        // Exact match first (existing behavior for every legacy account), then a
+        // case-insensitive fallback so a lowercase-normalized registration still
+        // signs in when the user retypes their email in any casing. V39's
+        // LOWER() unique indexes make the fallback unambiguous.
         User user = userRepository.findByEmailOrUsername(login)
+                .or(() -> userRepository.findByEmailOrUsernameIgnoreCase(login))
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email or username: " + login));
         return UserPrincipal.create(user);
     }

@@ -19,6 +19,7 @@ public class UserMapper {
                 .role(user.getRole().name())
                 .businessId(user.getBusinessId())
                 .businessSetupCompleted(user.isBusinessSetupCompleted())
+                .emailVerified(user.isEmailVerified())
                 .build();
     }
 

@@ -69,9 +69,25 @@ public class RateLimitFilter extends OncePerRequestFilter {
             // Account creation floods (also covers admin-created users, which
             // are one-per-form-submit, never a bulk loop).
             new Rule("/api/auth/signup", 5, 60_000),
-            // Password-reset emails: each hit sends real mail — the strictest
-            // cap of the three.
-            new Rule("/api/auth/forgot-password", 3, 300_000),
+            // Public self-service registration — same flood budget as signup.
+            new Rule("/api/auth/register", 5, 60_000),
+            // Verification codes: each hit sends real mail, and a flood here is
+            // either a confused user or someone spraying an inbox — capped at
+            // the same rate as password-reset mail.
+            new Rule("/api/auth/resend-verification", 3, 300_000),
+            // Code CHECKING: cheap (no mail) but it is the brute-force surface
+            // for a 6-digit code, so it gets the tight budget login gets.
+            new Rule("/api/auth/verify-email", 10, 60_000),
+            // Password-reset code CHECKING — same 6-digit brute-force surface as
+            // verify-email, and it had no rule at all before (unlimited guesses
+            // per IP per minute). Same tight budget.
+            new Rule("/api/auth/verify-otp", 10, 60_000),
+            // Password-reset emails: each hit sends real mail. 5 per 5 minutes
+            // matches reset-password and gives a real user headroom for the
+            // initial send plus a resend / "change email" retry without
+            // tripping the limiter, while still capping inbox flooding well
+            // below abuse territory.
+            new Rule("/api/auth/forgot-password", 5, 300_000),
             new Rule("/api/auth/reset-password", 5, 300_000),
             // Contact form SPAM/flooding.
             new Rule("/api/contact", 5, 300_000),

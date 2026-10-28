@@ -51,6 +51,28 @@ public class EmailService {
         }
     }
 
+    /**
+     * Sign-up verification mail. Separate from {@link #sendOtpEmail} because the
+     * audience differs: a brand-new account has never logged in, so the
+     * password-reset warning that footer carries would be nonsense (and alarming)
+     * here. Same visual template and 10-minute wording.
+     */
+    public void sendVerificationEmail(String toEmail, String otp, String name) {
+        if (resendApiKey == null || resendApiKey.isBlank()) {
+            log.warn("Resend API key not configured, skipping verification email send to: {}", toEmail);
+            return;
+        }
+        try {
+            String subject = "Verify your email — your Inside Invoice code";
+            String htmlContent = buildVerificationHtml(otp, name);
+            String textContent = buildVerificationText(otp, name);
+            sendViaResend("Inside Invoice", toEmail, subject, htmlContent, textContent, null);
+            log.info("Verification OTP email sent to: {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send verification email to: {}", toEmail, e);
+        }
+    }
+
     public void sendContactEmail(String name, String email, String phone, String message) {
         if (resendApiKey == null || resendApiKey.isBlank()) {
             log.warn("Resend API key not configured, skipping contact email");
@@ -273,6 +295,70 @@ public class EmailService {
                "Didn't try to log in? Someone may know your password - change it in your account and contact support.\n\n" +
                "Inside Invoice\n" +
                "X / Twitter: https://x.com/InsideInvoice\n" +
+               "(c) 2026 Inside Invoice. All rights reserved.\n";
+    }
+
+    // ==================== SIGN-UP VERIFICATION EMAIL ====================
+    /** Same chrome as the OTP mail; the copy addresses a first-time sign-up. */
+    private String buildVerificationHtml(String otp, String name) {
+        String greeting = (name == null || name.isBlank())
+                ? "Welcome to Inside Invoice!"
+                : "Welcome to Inside Invoice, " + escapeHtml(name) + "!";
+        return """
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                </head>
+                <body style="margin:0;padding:0;background-color:#f4f5f7;font-family:Arial,Helvetica,sans-serif;">
+                    <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:32px 16px;">
+                        <tr><td align="center">
+                            <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;border:1px solid #e2e8f0;">
+                                <tr><td style="padding:40px;">
+                                    <p style="margin:0 0 8px;color:#334155;font-size:15px;text-align:center;">%s</p>
+                                    <h1 style="margin:0 0 12px;color:#0f172a;font-size:24px;font-weight:bold;text-align:center;">Confirm your email address</h1>
+                                    <p style="margin:0 0 28px;color:#64748b;font-size:14px;text-align:center;">Enter this code to activate your account. Your account is created but stays private until you do.</p>
+                                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 28px;border:2px solid #e2e8f0;border-radius:12px;background-color:#f8fafc;">
+                                        <tr><td style="padding:24px 56px;">
+                                            <p style="margin:0;font-size:44px;font-weight:bold;color:#0f172a;font-family:monospace;letter-spacing:12px;text-align:center;">%s</p>
+                                        </td></tr>
+                                    </table>
+                                    <p style="margin:0 0 10px;color:#334155;font-size:15px;text-align:center;">This code expires in 10 minutes.</p>
+                                    <p style="margin:0 0 32px;color:#64748b;font-size:14px;text-align:center;">Please never share this code with anyone — Inside Invoice will never ask for it.</p>
+                                    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;border-top:1px solid #e2e8f0;padding-top:24px;">
+                                        <tr><td style="text-align:center;">
+                                            <p style="margin:0;color:#334155;font-size:14px;">Didn't create an account? You can safely ignore this email.</p>
+                                        </td></tr>
+                                    </table>
+                                </td></tr>
+                                <tr><td style="padding:24px 40px;background-color:#f8fafc;border-top:1px solid #e2e8f0;border-radius:0 0 12px 12px;">
+                                    <p style="margin:0 0 8px;color:#0f172a;font-size:16px;font-weight:bold;text-align:center;">Inside Invoice</p>
+                                    <p style="margin:0;color:#94a3b8;font-size:13px;text-align:center;">&copy; 2026 Inside Invoice. All rights reserved.</p>
+                                </td></tr>
+                            </table>
+                        </td></tr>
+                    </table>
+                </body>
+                </html>
+                """.formatted(greeting, otp != null ? otp : "N/A");
+    }
+
+    private String buildVerificationText(String otp, String name) {
+        String greeting = (name == null || name.isBlank())
+                ? "Welcome to Inside Invoice!"
+                : "Welcome to Inside Invoice, " + name + "!";
+        return "Inside Invoice\n" +
+               "=============\n\n" +
+               greeting + "\n\n" +
+               "Confirm your email address\n\n" +
+               "  " + (otp != null ? otp : "N/A") + "\n\n" +
+               "Enter this code to activate your account. Your account is created but stays\n" +
+               "private until you do.\n\n" +
+               "This code expires in 10 minutes. Please never share it - Inside Invoice\n" +
+               "will never ask for it.\n\n" +
+               "Didn't create an account? You can safely ignore this email.\n\n" +
+               "Inside Invoice\n" +
                "(c) 2026 Inside Invoice. All rights reserved.\n";
     }
 

@@ -19,6 +19,13 @@ public class ApiResponse<T> {
 
     private boolean success;
     private String message;
+    /**
+     * Optional machine-readable discriminator, e.g. {@code EMAIL_NOT_VERIFIED}.
+     * Null on every ordinary response ({@link JsonInclude#NON_NULL}), so the
+     * wire format is unchanged for existing clients — only errors that need a
+     * programmatic branch (not a message-string sniff) populate it.
+     */
+    private String code;
     private T data;
     private LocalDateTime timestamp;
 
@@ -42,6 +49,19 @@ public class ApiResponse<T> {
     public static <T> ApiResponse<T> error(String message) {
         return ApiResponse.<T>builder()
                 .success(false)
+                .message(message)
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+
+    /**
+     * Error carrying a stable {@code code} the client can branch on without
+     * parsing human text (which is worded for people and changes freely).
+     */
+    public static <T> ApiResponse<T> error(String code, String message) {
+        return ApiResponse.<T>builder()
+                .success(false)
+                .code(code)
                 .message(message)
                 .timestamp(LocalDateTime.now())
                 .build();

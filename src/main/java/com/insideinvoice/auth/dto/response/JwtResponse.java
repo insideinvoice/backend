@@ -22,6 +22,8 @@ public class JwtResponse {
     private String role;
     private Long businessId;
     private boolean businessSetupCompleted;
+    /** False only for a self-service sign-up that has not entered its mailed code. */
+    private boolean emailVerified;
 
     public JwtResponse(String accessToken, Long userId, String name, String username, String email,
                        String role, Long businessId, boolean businessSetupCompleted) {

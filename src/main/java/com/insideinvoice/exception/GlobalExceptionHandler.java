@@ -138,6 +138,15 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, "Invalid request");
     }
 
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleEmailNotVerified(EmailNotVerifiedException ex) {
+        // 403 (not 401) so the axios interceptor does not treat it as a dead
+        // session and wipe storage — the user is one OTP away from a real one.
+        log.info("Blocked sign-in for unverified account: {}", ex.getEmail());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(EmailNotVerifiedException.CODE, ex.getMessage()));
+    }
+
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException ex) {
         log.warn("Bad request: {}", ex.getMessage());
