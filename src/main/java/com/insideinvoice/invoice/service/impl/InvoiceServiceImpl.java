@@ -34,7 +34,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -54,6 +58,14 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final InvoiceNumberGenerator invoiceNumberGenerator;
     private final PaymentRepository paymentRepository;
     private final com.insideinvoice.einvoice.service.EInvoiceRegistrationService einvoiceRegistrationService;
+    private final com.insideinvoice.invoice.share.InvoiceEmailService invoiceEmailService;
+    /**
+     * Used by the optional sendEmail-on-create path: the afterCommit callback
+     * runs outside any transaction, but the email service needs one for its
+     * JPA reads. Auto-configured by Spring Boot alongside the
+     * PlatformTransactionManager.
+     */
+    private final TransactionTemplate transactionTemplate;
     private final ShippingLabelRepository shippingLabelRepository;
     private final HazmatLabelRepository hazmatLabelRepository;
 
@@ -161,6 +173,47 @@ public class InvoiceServiceImpl implements InvoiceService {
         // V45/V49: businesses that enabled e-invoicing with auto-register get
         // the IRN fetched immediately — best-effort, never blocks the invoice.
         einvoiceRegistrationService.autoRegisterIfConfigured(businessId, invoice.getId());
+
+        // Optional "create and email in one call" (API/PAT integrations). Fires
+        // AFTER COMMIT so the email can never reference an invoice that hasn't
+        // been durably saved (or was rolled back), and so a mail-provider
+        // outage cannot fail a create that already succeeded. Best-effort: a
+        // failure is logged here; the caller still gets the created invoice.
+        if (Boolean.TRUE.equals(request.getSendEmail())) {
+            final Long invoiceId = invoice.getId();
+            final String createdNumber = invoice.getInvoiceNumber();
+            final String origin = null;
+            Runnable send = () -> {
+                try {
+                    // afterCommit runs with the ORIGINAL transaction's resources
+                    // still thread-bound but already completed — a default
+                    // PROPAGATION_REQUIRED template would join those dead
+                    // resources ("Query requires transaction be in progress").
+                    // REQUIRES_NEW detaches them and opens a genuinely fresh
+                    // transaction for the email service's JPA reads.
+                    TransactionTemplate separateTx =
+                            new TransactionTemplate(transactionTemplate.getTransactionManager());
+                    separateTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                    separateTx.executeWithoutResult(status ->
+                            invoiceEmailService.sendInvoiceEmail(
+                                    invoiceId, businessId, origin, null, null));
+                    log.info("Invoice {} auto-emailed on create", createdNumber);
+                } catch (Exception e) {
+                    log.warn("Invoice {} was created but auto-email failed: {}",
+                            createdNumber, e.getMessage());
+                }
+            };
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        send.run();
+                    }
+                });
+            } else {
+                send.run();
+            }
+        }
 
         log.info("Invoice created: {} for businessId: {}", invoice.getInvoiceNumber(), businessId);
         return invoiceMapper.toResponse(invoice, customerName, customerPhone);

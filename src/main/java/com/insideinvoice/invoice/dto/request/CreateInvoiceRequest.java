@@ -133,6 +133,17 @@ public class CreateInvoiceRequest implements InvoiceExtendedFields {
     @Size(max = 20, message = "Tax mode must not exceed 20 characters")
     private String taxMode;
 
+    /**
+     * Optional: email the finished invoice to the customer as part of creation
+     * (server-rendered PDF + share link). Absent/false = today's behaviour, so
+     * every existing client and the draft-first UI flow are unchanged.
+     *
+     * <p>The send fires AFTER the transaction commits and is best-effort: a
+     * mail-provider failure is logged, never turned into a failed create (the
+     * invoice is already legally saved at that point).</p>
+     */
+    private Boolean sendEmail;
+
     @jakarta.validation.constraints.DecimalMin(value = "0", message = "Discount percent must be >= 0")
     @jakarta.validation.constraints.DecimalMax(value = "100", message = "Discount percent must be <= 100")
     private java.math.BigDecimal discountPercent;
