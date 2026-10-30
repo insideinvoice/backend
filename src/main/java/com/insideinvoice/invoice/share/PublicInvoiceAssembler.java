@@ -69,7 +69,16 @@ public class PublicInvoiceAssembler {
                 .taxMode(invoice.getTaxMode() != null ? invoice.getTaxMode().name() : null)
                 .showHnSac(business == null || business.getShowHnSac() == null || business.getShowHnSac())
                 .paymentTerms(invoice.getPaymentTerms())
-                .paymentMode(invoice.getPaymentMode())
+                // Ditto of the manual download: the UI normalizes a blank
+                // payment mode to CASH when it renders (InvoiceView seeds
+                // `paymentMode: inv.paymentMode || "CASH"` and every save
+                // guards `form.paymentMode || "CASH"`), so a blank DB value
+                // must print CASH here too — otherwise the emailed/shared
+                // document shows an empty Payment Mode field where the
+                // user's own download shows CASH.
+                .paymentMode(invoice.getPaymentMode() != null
+                        && !invoice.getPaymentMode().isBlank()
+                        ? invoice.getPaymentMode() : "CASH")
                 .placeOfSupply(invoice.getPlaceOfSupply())
                 .destination(invoice.getDestination())
                 .termsOfDelivery(invoice.getTermsOfDelivery())
