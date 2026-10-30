@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -28,6 +29,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Contract tests for POST /api/invoices/{id}/email.
+ *
+ * <p>The endpoint is ASYNC: a valid request returns 202 with the queued
+ * recipient, and delivery happens on a background worker. Success-path tests
+ * therefore verify the mocked mailer with Mockito's {@code timeout()} (which
+ * polls until the worker reaches it) and only assert database side effects
+ * AFTER that — the share link is created inside the worker's transaction.
+ * Failure paths (400/404/401) are validated synchronously on the request
+ * thread, so their assertions are immediate.</p>
  *
  * <p>EmailService is mocked: nothing leaves the machine, and the exact
  * recipient/subject/HTML the platform would send is asserted instead. The
@@ -52,22 +61,44 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         customer = customerRepository.findById(invoice.getCustomerId()).orElseThrow();
     }
 
+    /**
+     * The worker commits its transaction just after the mocked send; DB
+     * assertions made immediately after {@code verify(timeout(...))} could
+     * still race that commit, so poll briefly instead of sleeping blindly.
+     */
+    private static void awaitDb(java.util.function.BooleanSupplier condition, String what) {
+        long deadline = System.currentTimeMillis() + 15_000;
+        while (!condition.getAsBoolean()) {
+            if (System.currentTimeMillis() > deadline) {
+                throw new AssertionError("Timed out waiting for: " + what);
+            }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("Interrupted waiting for: " + what, e);
+            }
+        }
+    }
+
     @Test
-    @DisplayName("Owner sends: 200, correct recipient, branded subject, link + GST breakup in HTML")
+    @DisplayName("Owner sends: 202 queued, correct recipient, branded subject, link + GST breakup in HTML")
     void ownerSendsInvoiceEmail() throws Exception {
         mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
                         .header("Authorization", bearerFor(owner))
                         .param("frontendOrigin", ORIGIN))
-                .andExpect(status().isOk())
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Invoice email sent to " + customer.getEmail()));
+                .andExpect(jsonPath("$.message").value("Invoice email queued for " + customer.getEmail()))
+                .andExpect(jsonPath("$.data.recipient").value(customer.getEmail()))
+                .andExpect(jsonPath("$.data.status").value("QUEUED"));
 
         ArgumentCaptor<String> to = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> subject = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> fromName = ArgumentCaptor.forClass(String.class);
-        verify(emailService, times(1)).sendHtmlEmail(
+        verify(emailService, timeout(60_000).times(1)).sendHtmlEmail(
                 fromName.capture(), to.capture(), subject.capture(), html.capture(), text.capture(), any(), anyList());
 
         // From brands the user's business; delivery is via Inside Invoice.
@@ -76,7 +107,14 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         assertThat(to.getValue()).isEqualTo(customer.getEmail());
         assertThat(subject.getValue()).contains(invoice.getInvoiceNumber()).contains("Tax Invoice");
 
-        Invoice reloaded = invoiceRepository.findById(invoice.getId()).orElseThrow();
+        // The share link was created inside the worker's transaction — wait
+        // for that commit before reading it back.
+        final long invoiceId = invoice.getId();
+        awaitDb(() -> invoiceRepository.findById(invoiceId)
+                        .map(i -> i.getShareEnabled() && i.getShareToken() != null && !i.getShareToken().isBlank())
+                        .orElse(false),
+                "share link created by async worker");
+        Invoice reloaded = invoiceRepository.findById(invoiceId).orElseThrow();
         assertThat(reloaded.getShareEnabled()).isTrue();
         assertThat(reloaded.getShareToken()).isNotBlank();
         String expectedUrl = ORIGIN + "/i/" + reloaded.getShareToken();
@@ -99,10 +137,10 @@ class InvoiceEmailTest extends BaseIntegrationTest {
     void noBodyUsesConfiguredOrigin() throws Exception {
         mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
                         .header("Authorization", bearerFor(owner)))
-                .andExpect(status().isOk());
+                .andExpect(status().isAccepted());
 
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
-        verify(emailService, times(1)).sendHtmlEmail(any(), any(), any(), html.capture(), any(), any(), anyList());
+        verify(emailService, timeout(60_000).times(1)).sendHtmlEmail(any(), any(), any(), html.capture(), any(), any(), anyList());
         assertThat(html.getValue()).contains("https://insideinvoice.in/i/");
     }
 
@@ -115,14 +153,22 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
                         .header("Authorization", bearerFor(owner))
                         .param("frontendOrigin", ORIGIN))
-                .andExpect(status().isOk());
+                .andExpect(status().isAccepted());
 
-        Invoice reloaded = invoiceRepository.findById(invoice.getId()).orElseThrow();
+        // The worker recreates the link inside its own transaction before
+        // sending — wait for the mocked send, then for the commit.
+        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+        verify(emailService, timeout(60_000).times(1)).sendHtmlEmail(any(), any(), any(), html.capture(), any(), any(), anyList());
+
+        final long invoiceId = invoice.getId();
+        awaitDb(() -> invoiceRepository.findById(invoiceId)
+                        .map(i -> i.getShareEnabled() && i.getShareToken() != null && !i.getShareToken().isBlank())
+                        .orElse(false),
+                "share link recreated by async worker");
+        Invoice reloaded = invoiceRepository.findById(invoiceId).orElseThrow();
         assertThat(reloaded.getShareEnabled()).isTrue();
         assertThat(reloaded.getShareToken()).isNotBlank();
 
-        ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
-        verify(emailService, times(1)).sendHtmlEmail(any(), any(), any(), html.capture(), any(), any(), anyList());
         assertThat(html.getValue()).contains("/i/" + reloaded.getShareToken());
     }
 
@@ -188,13 +234,14 @@ class InvoiceEmailTest extends BaseIntegrationTest {
                                 "application/pdf", pdf))
                         .header("Authorization", bearerFor(owner))
                         .param("frontendOrigin", ORIGIN))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("QUEUED"));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<java.util.List<com.insideinvoice.email.EmailAttachment>> parts =
                 ArgumentCaptor.forClass((Class) java.util.List.class);
-        verify(emailService, times(1)).sendHtmlEmail(
+        verify(emailService, timeout(60_000).times(1)).sendHtmlEmail(
                 any(), any(), any(), any(), any(), any(), parts.capture());
 
         // Exactly one part: the PDF (no logo seeded on this business).
@@ -221,18 +268,24 @@ class InvoiceEmailTest extends BaseIntegrationTest {
         mockMvc.perform(multipart("/api/invoices/" + invoice.getId() + "/email")
                         .header("Authorization", bearerFor(owner))
                         .param("frontendOrigin", ORIGIN))
-                .andExpect(status().isOk());
+                .andExpect(status().isAccepted());
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<java.util.List<com.insideinvoice.email.EmailAttachment>> parts =
                 ArgumentCaptor.forClass((Class) java.util.List.class);
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
-        verify(emailService, times(1)).sendHtmlEmail(
+        verify(emailService, timeout(60_000).times(1)).sendHtmlEmail(
                 any(), any(), any(), html.capture(), any(), any(), parts.capture());
 
-        // No logo part goes out (nothing would reference it) — the email is
-        // text-only in its header, so no inline cid: image is attached.
-        assertThat(parts.getValue()).isEmpty();
+        // The logo never rides along as an image: the invoice PDF itself may
+        // attach (that's the product contract), but NO part has an inline
+        // content id — a cid: part is what an embedded logo would be — and no
+        // image mime types appear. If no renderer produced a PDF the list is
+        // simply empty, which satisfies this vacuously.
+        assertThat(parts.getValue()).allSatisfy(part -> {
+            assertThat(part.inlineContentId()).isNull();
+            assertThat(part.mimeType()).doesNotStartWith("image/");
+        });
 
         // The body carries no image at all.
         assertThat(html.getValue()).doesNotContain("<img");
@@ -249,14 +302,14 @@ class InvoiceEmailTest extends BaseIntegrationTest {
                                 "pdf", "evil.pdf", "application/pdf", notPdf))
                         .header("Authorization", bearerFor(owner))
                         .param("frontendOrigin", ORIGIN))
-                .andExpect(status().isOk());
+                .andExpect(status().isAccepted());
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<java.util.List<com.insideinvoice.email.EmailAttachment>> parts =
                 ArgumentCaptor.forClass((Class) java.util.List.class);
         // The email still sends; the bad upload never reaches the mailer (and no
         // logo is seeded here, so the parts list stays empty).
-        verify(emailService, times(1)).sendHtmlEmail(
+        verify(emailService, timeout(60_000).times(1)).sendHtmlEmail(
                 any(), any(), any(), any(), any(), any(), parts.capture());
         assertThat(parts.getValue()).isEmpty();
     }

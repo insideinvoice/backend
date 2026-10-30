@@ -2,6 +2,7 @@ package com.insideinvoice.invoice.controller;
 
 import com.insideinvoice.auth.dto.response.ApiResponse;
 import com.insideinvoice.common.Constants;
+import java.util.Map;
 import com.insideinvoice.common.dto.PagedResponse;
 import com.insideinvoice.invoice.dto.request.CreateInvoiceRequest;
 import com.insideinvoice.invoice.dto.request.UpdateInvoiceRequest;
@@ -44,6 +45,7 @@ public class InvoiceController {
     private final InvoiceImportService invoiceImportService;
     private final InvoiceShareService invoiceShareService;
     private final InvoiceEmailService invoiceEmailService;
+    private final com.insideinvoice.invoice.share.InvoiceEmailDispatcher invoiceEmailDispatcher;
 
     @PostMapping
     @Operation(summary = "Create a new invoice")
@@ -155,8 +157,10 @@ public class InvoiceController {
     }
 
     @PostMapping(value = "/{id}/email", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Email the invoice, its PDF and its share link to the customer")
-    public ResponseEntity<ApiResponse<Void>> sendInvoiceEmail(
+    @Operation(summary = "Queue the invoice email (PDF + share link) for background delivery",
+            description = "Returns 202 immediately; delivery runs on a background worker. "
+                    + "The response names the recipient so the client can confirm it.")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> sendInvoiceEmail(
             @PathVariable Long id,
             @RequestParam(name = "frontendOrigin", required = false) String frontendOrigin,
             @RequestPart(name = "pdf", required = false) MultipartFile pdf,
@@ -165,9 +169,29 @@ public class InvoiceController {
         // the emailed document matches what the user downloads. Optional: a missing
         // or invalid file still sends the email with its share link.
         byte[] pdfBytes = (pdf != null && !pdf.isEmpty()) ? pdf.getBytes() : null;
-        String recipient = invoiceEmailService.sendInvoiceEmail(
-                id, currentUser.getBusinessId(), frontendOrigin,
-                pdfBytes, pdf != null ? pdf.getOriginalFilename() : null);
-        return ResponseEntity.ok(ApiResponse.success("Invoice email sent to " + recipient));
+        String filename = pdf != null ? pdf.getOriginalFilename() : null;
+        Long businessId = currentUser.getBusinessId();
+
+        // Validate on the request thread — a send that can never succeed
+        // (unknown invoice, customer with no email, bad frontend origin) must
+        // fail fast with a real 4xx, not be queued and silently die in a
+        // worker where the user would only see a success toast.
+        String recipient = invoiceEmailService.resolveRecipient(id, businessId);
+        invoiceEmailService.resolveFrontendOrigin(frontendOrigin);
+
+        // Hand off to the bounded pool. The browser render + mail round-trip
+        // (1-8s) no longer occupies this request thread, so the endpoint returns
+        // in milliseconds and a burst of sends cannot exhaust Tomcat's pool.
+        invoiceEmailDispatcher.sendAsync(id, businessId, frontendOrigin, pdfBytes, filename);
+
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("invoiceId", id);
+        body.put("recipient", recipient);
+        body.put("status", "QUEUED");
+        // 202 Accepted: the request was valid and accepted for processing, but
+        // the work (delivery) completes asynchronously — the semantically
+        // correct status, and it lets clients branch on "queued" vs "sent".
+        return ResponseEntity.status(org.springframework.http.HttpStatus.ACCEPTED)
+                .body(ApiResponse.success("Invoice email queued for " + recipient, body));
     }
 }

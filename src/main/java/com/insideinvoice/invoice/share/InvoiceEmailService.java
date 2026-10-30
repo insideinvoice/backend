@@ -46,6 +46,27 @@ public class InvoiceEmailService {
     private String defaultFrontendBaseUrl;
 
     /**
+     * @return the address this invoice would be emailed to, validating that it
+     *         CAN be emailed at all (invoice exists in this business, customer
+     *         exists and has an address).
+     *
+     * <p>Used by the async path to fail fast on the request thread: a send
+     * that could never succeed must surface as a real 4xx to the caller, not
+     * be queued and silently die in a worker where the user only saw a
+     * success toast.</p>
+     */
+    public String resolveRecipient(Long invoiceId, Long businessId) {
+        Invoice invoice = invoiceRepository.findByIdAndBusinessIdWithItems(invoiceId, businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+        Customer customer = customerRepository.findByIdAndBusinessId(invoice.getCustomerId(), businessId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", invoice.getCustomerId()));
+        if (customer.getEmail() == null || customer.getEmail().isBlank()) {
+            throw new BadRequestException("This customer has no email address. Add one to the customer and try again.");
+        }
+        return customer.getEmail();
+    }
+
+    /**
      * @return the recipient address the invoice was sent to
      */
     public String sendInvoiceEmail(Long invoiceId, Long businessId, String frontendOrigin) {
@@ -156,6 +177,19 @@ public class InvoiceEmailService {
                 .trim();
         if (cleaned.isBlank() || cleaned.equals(".") || cleaned.equals("..")) return fallback;
         return cleaned.toLowerCase().endsWith(".pdf") ? cleaned : cleaned + ".pdf";
+    }
+
+    /**
+     * Fail-fast origin check for the async path: validates the caller's
+     * frontend origin on the REQUEST thread before anything is queued, so a
+     * bad origin is a real 400 response instead of a queued task that dies
+     * silently in a worker (the user would only see a success toast).
+     *
+     * @return the normalized base URL (callers may ignore the value — the
+     *         send path recomputes it inside the worker)
+     */
+    public String resolveFrontendOrigin(String frontendOrigin) {
+        return resolveFrontendBase(frontendOrigin);
     }
 
     /**
